@@ -1,145 +1,126 @@
 # GenerAI - AI Article Generator and Medium Publisher
 
-GenerAI is a Python tool that uses OpenAI's API to generate high-quality articles and publish them directly to Medium. This tool streamlines the content creation process by leveraging AI to draft articles on any topic and providing an easy way to publish them to your Medium account.
+## Overview
+
+GenerAI is a powerful tool for generating high-quality articles using OpenAI's API and publishing them to Medium. The application offers two modes of operation:
+
+1. **Simple Mode**: Quick generation of articles on a given topic
+2. **Modular Pipeline Mode**: Advanced multi-step process for comprehensive article creation
 
 ## Features
 
-- Generate well-structured articles on any topic using OpenAI's powerful language models
-- Real-time web search integration via Tavily API for up-to-date research
-- Customize article tone, length, and structure
-- Publish articles directly to Medium with proper formatting
-- Save generated articles to local files
-- Configure via environment variables or JSON configuration file
-- Detailed logging for troubleshooting
+- AI-powered article generation with customizable tone and length
+- Modular pipeline approach for research-based content creation
+- Trend analysis and competitor research
+- Idea generation and evaluation
+- Structured outline and paragraph generation
+- SEO optimization
+- Direct publishing to Medium
+- Performance metrics tracking and feedback loop
 
 ## Installation
 
-1. Clone this repository:
-   ```
-   git clone https://github.com/yourusername/generAI.git
-   cd generAI
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/generAI.git
+cd generAI
 
-2. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
+# Install dependencies
+pip install -r requirements.txt
 
-3. Set up your configuration:
-   - Copy `.env.example` to `.env` and fill in your API keys
-   - OR copy `config.json.example` to `config.json` and fill in your API keys
-
-## Configuration
-
-### Configuration Method
-
-This application uses environment variables for configuration. No config.json file is needed.
-
-#### Required API Keys
-
-1. **OpenAI API Key**: Get this from [OpenAI's platform](https://platform.openai.com/)
-2. **Tavily API Key**: Get this from [Tavily's website](https://tavily.com) for web search functionality
-3. **Medium Integration Token**: Get this from [Medium's developer settings](https://medium.com/me/settings)
-
-#### Setting Up Environment Variables
-
-Copy the `.env.example` file to `.env` and fill in your details:
-
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your API keys
 ```
-OPENAI_API_KEY=your-openai-api-key-here
-OPENAI_MODEL=gpt-4
-TAVILY_API_KEY=your-tavily-api-key-here
-MEDIUM_INTEGRATION_TOKEN=your-medium-integration-token-here
-MEDIUM_AUTHOR_ID=your-medium-author-id-here
-DEFAULT_TAGS=AI,Technology,Writing,Content Creation
-DEFAULT_STATUS=draft
-```
-
-## Web Search Integration
-
-GenerAI now integrates with the Tavily API to search the web for current information during the research and article generation process. This ensures that generated content includes up-to-date information and real-world context.
-
-### Benefits of Web Search Integration
-
-- **Real-time data**: Articles include current trends and developments
-- **Enhanced research**: Trend analysis and competitor research use actual web content
-- **Better article ideas**: Ideas are generated based on both AI knowledge and current web information
-- **More accurate content**: Facts and information are verified against current web sources
-
-### How Web Search is Used
-
-Web search is integrated into several key parts of the article generation pipeline:
-
-1. **Trend Analysis**: Finds current trending topics and recent developments
-2. **Competitor Research**: Analyzes existing content on the topic
-3. **Idea Generation**: Incorporates real-world data into article ideas
 
 ## Usage
 
-### Basic Usage
+The application has a single entry point (`generai.py`) with two operation modes:
 
-Generate an article and display it in the console:
+### Simple Mode
 
-```
-python article_generator.py --topic "The Future of Artificial Intelligence"
-```
+Quickly generate an article on a specific topic:
 
-### Customizing Article Generation
-
-```
-python article_generator.py \
-    --topic "The Future of Artificial Intelligence" \
-    --tone professional \
-    --length long \
-    --outline "Introduction,Current State of AI,Future Predictions,Ethical Considerations,Conclusion"
+```bash
+python generai.py simple --topic "Artificial Intelligence Trends" --tone informative --length medium --output article.md
 ```
 
-### Saving to File
+Publish to Medium:
 
-```
-python article_generator.py \
-    --topic "The Future of Artificial Intelligence" \
-    --output article.md
+```bash
+python generai.py simple --topic "Artificial Intelligence Trends" --publish --tags "AI,Technology" --status draft
 ```
 
-### Publishing to Medium
+### Modular Pipeline Mode
 
-```
-python article_generator.py \
-    --topic "The Future of Artificial Intelligence" \
-    --publish \
-    --tags "AI,Future,Technology,Ethics" \
-    --status draft
+Run the complete article generation pipeline:
+
+```bash
+python generai.py modular --run-full-pipeline --research-topic "Artificial Intelligence Trends" --output article.md
 ```
 
-## Command Line Options
+Or run individual steps:
 
-### Article Generation Options
+```bash
+# Generate ideas
+python generai.py modular --generate-ideas --research-topic "Artificial Intelligence Trends" --num-ideas 5
 
-- `--topic`: Topic for the article (required if not provided interactively)
-- `--tone`: Tone of the article (informative, casual, professional, technical, conversational)
-- `--length`: Length of the article (short, medium, long)
-- `--outline`: Comma-separated list of sections to include
+# Evaluate ideas and select the best one
+python generai.py modular --evaluate-ideas
 
-### Medium Publishing Options
+# Create a project for the selected idea
+python generai.py modular --create-project
 
-- `--publish`: Publish to Medium after generation
-- `--tags`: Comma-separated list of tags for Medium
-- `--status`: Publication status on Medium (draft, public, unlisted)
-- `--canonical-url`: Original URL if this is a cross-post
+# Generate an outline for the project
+python generai.py modular --generate-outline PROJECT_ID
 
-### Output Options
+# Generate paragraphs based on the outline
+python generai.py modular --generate-paragraphs PROJECT_ID
 
-- `--output`: Save article to file
+# Assemble the article
+python generai.py modular --assemble-article PROJECT_ID
 
-## Logs
+# Refine the article
+python generai.py modular --refine-article PROJECT_ID
 
-Logs are stored in the `logs` directory with timestamps for easy troubleshooting.
+# Optimize for SEO
+python generai.py modular --optimize-seo PROJECT_ID
+
+# Publish to Medium
+python generai.py modular --publish PROJECT_ID --tags "AI,Technology" --status draft
+```
+
+## Configuration
+
+The application uses environment variables for configuration. Copy the `.env.example` file to `.env` and set the following variables:
+
+- `OPENAI_API_KEY`: Your OpenAI API key
+- `OPENAI_MODEL`: The OpenAI model to use (default: gpt-4)
+- `MEDIUM_INTEGRATION_TOKEN`: Your Medium integration token
+- `MEDIUM_AUTHOR_ID`: Your Medium author ID (optional)
+- `TAVILY_API_KEY`: Your Tavily API key for web search functionality
+
+## Directory Structure
+
+```
+├── generai.py          # Main entry point
+├── requirements.txt    # Dependencies
+├── .env.example        # Example environment variables
+├── data/               # Data directory
+│   ├── article_queue/  # Queue of articles to be written
+│   ├── ideas/          # Generated article ideas
+│   └── projects/       # Article projects
+└── src/                # Source code
+    ├── article_pipeline.py   # Modular pipeline implementation
+    ├── cache_manager.py      # API response caching
+    ├── config_manager.py     # Configuration management
+    ├── feedback_manager.py   # Performance feedback loop
+    ├── medium_publisher.py   # Medium publishing functionality
+    ├── openai_client.py      # OpenAI API client
+    ├── utils.py              # Utility functions
+    └── web_search.py         # Web search functionality
+```
 
 ## License
 
 MIT
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.

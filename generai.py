@@ -1,140 +1,238 @@
 #!/usr/bin/env python3
 """
-Modular Article Generator
+GenerAI - AI Article Generator and Medium Publisher
 
-This script implements a modular approach to article generation with a pipeline architecture.
-It breaks down the article creation process into sequential steps:
-1. Idea generation through research
-2. Idea evaluation and selection
-3. Project setup for selected article
-4. Outline generation
-5. Paragraph-by-paragraph content generation
-6. Article assembly
-7. Final refinement
+This is the main entry point for the GenerAI application. It provides a unified interface
+for article generation and publishing with both simple and modular pipeline approaches.
+
+The application supports:
+1. Simple article generation - Quick generation of articles on a given topic
+2. Modular pipeline approach - Advanced multi-step process including:
+   - Idea generation through research
+   - Idea evaluation and selection
+   - Project setup for selected article
+   - Outline generation
+   - Paragraph-by-paragraph content generation
+   - Article assembly
+   - Final refinement
+   - SEO optimization
+   - Medium publishing
+
+Usage:
+  Simple mode: python generai.py simple --topic "Your Topic" [options]
+  Modular mode: python generai.py modular --run-full-pipeline [options]
 """
 
 import os
 import argparse
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any
+from pathlib import Path
+from typing import Dict, List, Optional, Any
 
 from loguru import logger
 
 from src.config_manager import ConfigManager
 from src.openai_client import OpenAIClient
-from src.article_pipeline import ArticlePipeline
 from src.medium_publisher import MediumPublisher
-from src.utils import setup_logging
+from src.utils import setup_logging, parse_outline
+
+# Import for modular pipeline approach
+from src.article_pipeline import ArticlePipeline
 
 
 def setup_argparse() -> argparse.Namespace:
-    """Set up command line argument parsing.
+    """
+    Set up command line argument parsing with options for both simple and modular approaches.
     
     Returns:
         Parsed command line arguments
     """
-    parser = argparse.ArgumentParser(description="Generate articles with a modular pipeline approach")
+    parser = argparse.ArgumentParser(
+        description="Generate articles with OpenAI and publish to Medium",
+        epilog="GenerAI supports both simple article generation and a modular pipeline approach."
+    )
+    
+    # Create subparsers for different modes
+    subparsers = parser.add_subparsers(dest="mode", help="Operation mode")
+    
+    # Simple mode (original article_generator.py and main.py functionality)
+    simple_parser = subparsers.add_parser("simple", help="Simple article generation")
+    
+    # Article generation options for simple mode
+    simple_parser.add_argument("--topic", type=str, help="Topic for the article")
+    simple_parser.add_argument("--tone", type=str, default="informative", 
+                        choices=["informative", "casual", "professional", "technical", "conversational"],
+                        help="Tone of the article")
+    simple_parser.add_argument("--length", type=str, default="medium", 
+                        choices=["short", "medium", "long"],
+                        help="Length of the article")
+    simple_parser.add_argument("--outline", type=str, help="Comma-separated list of sections to include")
+    
+    # Medium publishing options for simple mode
+    simple_parser.add_argument("--publish", action="store_true", help="Publish to Medium after generation")
+    simple_parser.add_argument("--tags", type=str, help="Comma-separated list of tags for Medium")
+    simple_parser.add_argument("--status", type=str, default="draft", 
+                        choices=["draft", "public", "unlisted"],
+                        help="Publication status on Medium")
+    simple_parser.add_argument("--canonical-url", type=str, help="Original URL if this is a cross-post")
+    
+    # Output options for simple mode
+    simple_parser.add_argument("--output", type=str, help="Save article to file")
+    
+    # Modular mode (modular_article_generator.py functionality)
+    modular_parser = subparsers.add_parser("modular", help="Modular pipeline approach")
     
     # Pipeline control options
-    parser.add_argument("--run-full-pipeline", action="store_true", 
+    modular_parser.add_argument("--run-full-pipeline", action="store_true", 
                         help="Run the complete article generation pipeline")
-    parser.add_argument("--data-dir", type=str, default="data",
+    modular_parser.add_argument("--data-dir", type=str, default="data",
                         help="Directory for storing article data")
     
     # Caching and feedback options
-    parser.add_argument("--use-cache", action="store_true", dest="use_cache",
+    modular_parser.add_argument("--use-cache", action="store_true", dest="use_cache",
                         help="Enable API response caching (default based on config)")
-    parser.add_argument("--no-cache", action="store_false", dest="use_cache",
+    modular_parser.add_argument("--no-cache", action="store_false", dest="use_cache",
                         help="Disable API response caching")
-    parser.add_argument("--use-feedback", action="store_true", dest="use_feedback",
+    modular_parser.add_argument("--use-feedback", action="store_true", dest="use_feedback",
                         help="Enable feedback loop mechanism (default based on config)")
-    parser.add_argument("--no-feedback", action="store_false", dest="use_feedback",
+    modular_parser.add_argument("--no-feedback", action="store_false", dest="use_feedback",
                         help="Disable feedback loop mechanism")
-    parser.add_argument("--record-metrics", type=str, metavar="PROJECT_ID",
+    modular_parser.add_argument("--record-metrics", type=str, metavar="PROJECT_ID",
                         help="Record performance metrics for a published article")
     
     # Individual step options
-    parser.add_argument("--analyze-trends", action="store_true",
+    modular_parser.add_argument("--analyze-trends", action="store_true",
                         help="Analyze current trends for a topic")
-    parser.add_argument("--research-competitors", action="store_true",
+    modular_parser.add_argument("--research-competitors", action="store_true",
                         help="Research competitor content for a topic")
-    parser.add_argument("--generate-ideas", action="store_true",
+    modular_parser.add_argument("--generate-ideas", action="store_true",
                         help="Generate article ideas based on trend analysis and competitor research")
-    parser.add_argument("--research-topic", type=str,
+    modular_parser.add_argument("--research-topic", type=str,
                         help="Topic to research for trend analysis, competitor research, and idea generation")
-    parser.add_argument("--num-ideas", type=int, default=5,
+    modular_parser.add_argument("--num-ideas", type=int, default=5,
                         help="Number of ideas to generate")
     
-    parser.add_argument("--evaluate-ideas", action="store_true",
+    modular_parser.add_argument("--evaluate-ideas", action="store_true",
                         help="Evaluate existing ideas and select the best one")
-    parser.add_argument("--max-ideas", type=int, default=10,
+    modular_parser.add_argument("--max-ideas", type=int, default=10,
                         help="Maximum number of ideas to evaluate")
     
-    parser.add_argument("--create-project", action="store_true",
+    modular_parser.add_argument("--create-project", action="store_true",
                         help="Create a project for the next article in the queue")
     
-    parser.add_argument("--generate-outline", type=str, metavar="PROJECT_ID",
+    modular_parser.add_argument("--generate-outline", type=str, metavar="PROJECT_ID",
                         help="Generate an outline for the specified project")
     
-    parser.add_argument("--generate-paragraphs", type=str, metavar="PROJECT_ID",
+    modular_parser.add_argument("--generate-paragraphs", type=str, metavar="PROJECT_ID",
                         help="Generate paragraphs for the specified project")
     
-    parser.add_argument("--assemble-article", type=str, metavar="PROJECT_ID",
+    modular_parser.add_argument("--assemble-article", type=str, metavar="PROJECT_ID",
                         help="Assemble the article for the specified project")
     
-    parser.add_argument("--refine-article", type=str, metavar="PROJECT_ID",
+    modular_parser.add_argument("--refine-article", type=str, metavar="PROJECT_ID",
                         help="Refine the article for the specified project")
     
-    parser.add_argument("--optimize-seo", type=str, metavar="PROJECT_ID",
+    modular_parser.add_argument("--optimize-seo", type=str, metavar="PROJECT_ID",
                         help="Optimize the article for SEO for the specified project")
     
-    # Medium publishing options
-    parser.add_argument("--publish", type=str, metavar="PROJECT_ID",
+    # Medium publishing options for modular mode
+    modular_parser.add_argument("--publish", type=str, metavar="PROJECT_ID",
                         help="Publish the article for the specified project to Medium")
-    parser.add_argument("--tags", type=str,
+    modular_parser.add_argument("--tags", type=str,
                         help="Comma-separated list of tags for Medium")
-    parser.add_argument("--status", type=str, default="draft", 
+    modular_parser.add_argument("--status", type=str, default="draft", 
                         choices=["draft", "public", "unlisted"],
                         help="Publication status on Medium")
     
-    # Output options
-    parser.add_argument("--output", type=str,
+    # Output options for modular mode
+    modular_parser.add_argument("--output", type=str,
                         help="Save final article to file")
     
     return parser.parse_args()
 
 
-def main():
-    """Main function to run the modular article generator."""
-    # Set up logging
-    setup_logging()
+def run_simple_mode(args, config):
+    """
+    Run the simple article generation mode (from original article_generator.py and main.py).
     
-    # Create logs directory if it doesn't exist
-    os.makedirs("logs", exist_ok=True)
+    Args:
+        args: Command line arguments
+        config: Application configuration
+    """
+    # Check if OpenAI API key is available
+    if not config["openai"]["api_key"]:
+        logger.error("OpenAI API key not found. Please set it as OPENAI_API_KEY environment variable.")
+        return
     
-    # Parse command line arguments
-    args = setup_argparse()
+    # Initialize OpenAI client
+    openai_client = OpenAIClient(
+        api_key=config["openai"]["api_key"],
+        model=config["openai"]["model"]
+    )
     
-    # Load configuration
-    config_manager = ConfigManager()
-    config = config_manager.get_config()
+    # Get topic from arguments or prompt user
+    topic = args.topic
+    if not topic:
+        topic = input("Enter the topic for your article: ")
     
+    # Parse outline if provided
+    outline = parse_outline(args.outline)
+    
+    # Generate the article
+    article = openai_client.generate_article(
+        topic=topic,
+        tone=args.tone,
+        length=args.length,
+        outline=outline
+    )
+    
+    if not article["title"] or not article["content"]:
+        logger.error("Failed to generate article.")
+        return
+    
+    # Save to file if requested
+    if args.output:
+        output_file = args.output
+        try:
+            with open(output_file, "w") as f:
+                f.write(f"# {article['title']}\n\n{article['content']}")
+            logger.info(f"Article saved to {output_file}")
+        except Exception as e:
+            logger.error(f"Error saving article to file: {e}")
+    else:
+        # Print the article to console
+        print(f"\n{'=' * 80}\n{article['title']}\n{'=' * 80}\n")
+        print(article["content"])
+        print(f"\n{'=' * 80}\n")
+    
+    # Publish to Medium if requested
+    if args.publish:
+        publish_to_medium(config, article, args)
+
+
+def run_modular_mode(args, config):
+    """
+    Run the modular pipeline approach (from modular_article_generator.py).
+    
+    Args:
+        args: Command line arguments
+        config: Application configuration
+    """
     # Check if OpenAI API key is available
     if not config["openai"]["api_key"]:
         logger.error("OpenAI API key not found. Please set it as OPENAI_API_KEY environment variable.")
         return
     
     # Determine whether to use cache and feedback from args or config
-    use_cache = args.use_cache if hasattr(args, 'use_cache') and args.use_cache is not None else config["openai"]["use_cache"]
-    use_feedback = args.use_feedback if hasattr(args, 'use_feedback') and args.use_feedback is not None else config["feedback"]["enabled"]
+    use_cache = args.use_cache if hasattr(args, 'use_cache') and args.use_cache is not None else config["openai"].get("use_cache", True)
+    use_feedback = args.use_feedback if hasattr(args, 'use_feedback') and args.use_feedback is not None else config["feedback"].get("enabled", True)
     
     # Initialize OpenAI client with caching support
     openai_client = OpenAIClient(
         api_key=config["openai"]["api_key"],
         model=config["openai"]["model"],
         use_cache=use_cache,
-        cache_ttl_days=config["cache"]["ttl_days"]
+        cache_ttl_days=config["cache"].get("ttl_days", 7)
     )
     
     # Initialize article pipeline with feedback loop and web search
@@ -191,8 +289,8 @@ def main():
                     print(f"Keywords: {final_article['keywords']}")
                 print(f"\n{'=' * 80}\n")
         
-        # Publish to Medium if requested
-        if args.publish:
+        # Publish to Medium if args.publish is a string (project ID)
+        if isinstance(args.publish, str):
             result = publish_to_medium(config, final_article, args)
             
             # Record metrics if publishing was successful and feedback is enabled
@@ -206,7 +304,6 @@ def main():
                     "reads": 0,
                     "claps": 0
                 })
-            
     else:
         # Run individual steps based on arguments
         if args.analyze_trends:
@@ -361,7 +458,8 @@ def main():
             except Exception as e:
                 logger.error(f"Error recording metrics: {e}")
         
-        if args.publish:
+        # Publish to Medium if args.publish is a string (project ID)
+        if isinstance(args.publish, str):
             # Load the final article from the project
             project_dir = Path(args.data_dir) / "projects" / args.publish
             try:
@@ -374,7 +472,8 @@ def main():
 
 
 def publish_to_medium(config, article, args) -> Dict[str, Any]:
-    """Publish an article to Medium.
+    """
+    Publish an article to Medium.
     
     Args:
         config: Application configuration
@@ -387,7 +486,7 @@ def publish_to_medium(config, article, args) -> Dict[str, Any]:
     # Check if Medium integration token is available
     if not config["medium"]["integration_token"]:
         logger.error("Medium integration token not found. Please set it as MEDIUM_INTEGRATION_TOKEN environment variable.")
-        return
+        return {"success": False, "error": "Medium integration token not found"}
     
     # Initialize Medium publisher
     medium_publisher = MediumPublisher(
@@ -414,12 +513,16 @@ def publish_to_medium(config, article, args) -> Dict[str, Any]:
     if meta_description:
         content = f"*{meta_description}*\n\n{content}"
     
+    # Get canonical URL if available (only in simple mode)
+    canonical_url = getattr(args, 'canonical_url', None)
+    
     # Publish the article
     result = medium_publisher.publish_article(
         title=title,
         content=content,
         tags=tags,
-        publish_status=status
+        publish_status=status,
+        canonical_url=canonical_url
     )
     
     if result["success"]:
@@ -430,6 +533,38 @@ def publish_to_medium(config, article, args) -> Dict[str, Any]:
         print(f"\nFailed to publish to Medium: {result.get('error', 'Unknown error')}")
     
     return result
+
+
+def main():
+    """
+    Main function that serves as the entry point for the GenerAI application.
+    Provides a unified interface for both simple and modular article generation approaches.
+    
+    Simple mode: Quick generation of articles on a given topic
+    Modular mode: Advanced multi-step pipeline for comprehensive article creation
+    """
+    # Set up logging
+    setup_logging()
+    
+    # Create logs directory if it doesn't exist
+    os.makedirs("logs", exist_ok=True)
+    
+    # Parse command line arguments
+    args = setup_argparse()
+    
+    # Load configuration
+    config_manager = ConfigManager()
+    config = config_manager.get_config()
+    
+    # Determine which mode to run based on args
+    if args.mode == "simple" or args.mode is None:  # Default to simple mode if not specified
+        run_simple_mode(args, config)
+    elif args.mode == "modular":
+        run_modular_mode(args, config)
+    else:
+        logger.error(f"Unknown mode: {args.mode}")
+        print(f"Unknown mode: {args.mode}. Use 'simple' or 'modular'.")
+        print("For help, run: python generai.py --help")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,9 @@
+# Dependencies for Article Generator and Medium Publisher
+openai>=1.0.0
+requests>=2.28.0
+python-dotenv>=1.0.0
+medium-api>=0.4.0
+python-medium>=0.4.0
+markdown>=3.4.0
+argparse>=1.4.0
+loguru>=0.7.0

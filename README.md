@@ -5,6 +5,7 @@ GenerAI is a Python tool that uses OpenAI's API to generate high-quality article
 ## Features
 
 - Generate well-structured articles on any topic using OpenAI's powerful language models
+- Real-time web search integration via Tavily API for up-to-date research
 - Customize article tone, length, and structure
 - Publish articles directly to Medium with proper formatting
 - Save generated articles to local files
@@ -37,7 +38,8 @@ This application uses environment variables for configuration. No config.json fi
 #### Required API Keys
 
 1. **OpenAI API Key**: Get this from [OpenAI's platform](https://platform.openai.com/)
-2. **Medium Integration Token**: Get this from [Medium's developer settings](https://medium.com/me/settings)
+2. **Tavily API Key**: Get this from [Tavily's website](https://tavily.com) for web search functionality
+3. **Medium Integration Token**: Get this from [Medium's developer settings](https://medium.com/me/settings)
 
 #### Setting Up Environment Variables
 
@@ -46,11 +48,31 @@ Copy the `.env.example` file to `.env` and fill in your details:
 ```
 OPENAI_API_KEY=your-openai-api-key-here
 OPENAI_MODEL=gpt-4
+TAVILY_API_KEY=your-tavily-api-key-here
 MEDIUM_INTEGRATION_TOKEN=your-medium-integration-token-here
 MEDIUM_AUTHOR_ID=your-medium-author-id-here
 DEFAULT_TAGS=AI,Technology,Writing,Content Creation
 DEFAULT_STATUS=draft
 ```
+
+## Web Search Integration
+
+GenerAI now integrates with the Tavily API to search the web for current information during the research and article generation process. This ensures that generated content includes up-to-date information and real-world context.
+
+### Benefits of Web Search Integration
+
+- **Real-time data**: Articles include current trends and developments
+- **Enhanced research**: Trend analysis and competitor research use actual web content
+- **Better article ideas**: Ideas are generated based on both AI knowledge and current web information
+- **More accurate content**: Facts and information are verified against current web sources
+
+### How Web Search is Used
+
+Web search is integrated into several key parts of the article generation pipeline:
+
+1. **Trend Analysis**: Finds current trending topics and recent developments
+2. **Competitor Research**: Analyzes existing content on the topic
+3. **Idea Generation**: Incorporates real-world data into article ideas
 
 ## Usage
 

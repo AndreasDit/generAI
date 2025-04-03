@@ -7,3 +7,4 @@ python-medium>=0.4.0
 markdown>=3.4.0
 argparse>=1.4.0
 loguru>=0.7.0
+tavily-python>=0.2.0  # For internet search capabilities

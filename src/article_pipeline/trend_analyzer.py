@@ -160,4 +160,149 @@ class TrendAnalyzer:
             return {
                 "error": str(e),
                 "web_search_used": bool(web_insights)
+            }
+    
+    def research_competitors(self, research_topic: str) -> Dict[str, Any]:
+        """Research competitor content for a topic.
+        
+        Args:
+            research_topic: Topic to research competitors for
+            
+        Returns:
+            Dictionary containing competitor research data
+        """
+        logger.info(f"Researching competitors for topic: {research_topic}")
+        
+        # Get web search results if available
+        web_insights = {}
+        if self.web_search and self.web_search.is_available():
+            try:
+                logger.info(f"Gathering competitor insights for: {research_topic}")
+                web_results = self.web_search.get_competitor_content(research_topic)
+                
+                if not web_results.get("error"):
+                    web_insights = {
+                        "competitor_content": web_results.get("results", []),
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    logger.info(f"Successfully gathered competitor insights")
+                else:
+                    logger.warning(f"Error in web search: {web_results.get('error')}")
+            except Exception as e:
+                logger.error(f"Error gathering competitor insights: {e}")
+        
+        # Construct the prompt for competitor research
+        system_prompt = (
+            "You are an expert content strategist who analyzes competitor content. "
+            "Your analysis should identify common themes, content gaps, and opportunities for differentiation."
+        )
+        
+        # Include web insights in the prompt if available
+        web_insights_text = ""
+        if web_insights:
+            web_insights_text = "\n\nHere are some competitor content examples to inform your analysis:\n"
+            
+            # Add competitor content
+            if "competitor_content" in web_insights and web_insights["competitor_content"]:
+                web_insights_text += "\nCompetitor Content Examples:\n"
+                for i, result in enumerate(web_insights["competitor_content"][:5], 1):
+                    web_insights_text += f"{i}. {result.get('title', 'No title')}: {result.get('content', 'No content')}\n"
+            
+            # Add common themes
+            if "common_themes" in web_insights and web_insights["common_themes"]:
+                web_insights_text += "\nCommon Themes:\n"
+                for i, result in enumerate(web_insights["common_themes"][:3], 1):
+                    web_insights_text += f"{i}. {result}\n"
+            
+            # Add content gaps
+            if "content_gaps" in web_insights and web_insights["content_gaps"]:
+                web_insights_text += "\nContent Gaps:\n"
+                for i, result in enumerate(web_insights["content_gaps"][:3], 1):
+                    web_insights_text += f"{i}. {result}\n"
+        
+        user_prompt = f"""Research competitor content for '{research_topic}'.{web_insights_text}
+        
+        Provide the following information:
+        1. Common themes across competitor content
+        2. Content gaps or underserved areas
+        3. Typical content structures and formats
+        4. Strengths and weaknesses of competitor content
+        5. Opportunities for differentiation
+        
+        Format your analysis as follows:
+        COMMON_THEMES: [List of common themes]
+        CONTENT_GAPS: [List of content gaps]
+        TYPICAL_STRUCTURES: [Description of typical structures]
+        STRENGTHS_WEAKNESSES: [Analysis of strengths and weaknesses]
+        DIFFERENTIATION_OPPORTUNITIES: [List of differentiation opportunities]
+        """
+        
+        try:
+            response = self.openai_client.client.chat.completions.create(
+                model=self.openai_client.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1500,
+            )
+            
+            content = response.choices[0].message.content
+            
+            # Parse the competitor research
+            competitor_research = {}
+            current_section = None
+            current_content = []
+            
+            lines = content.strip().split("\n")
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                if line.startswith("COMMON_THEMES:"):
+                    current_section = "common_themes"
+                    current_content = [line[14:].strip()]
+                elif line.startswith("CONTENT_GAPS:"):
+                    if current_section:
+                        competitor_research[current_section] = "\n".join(current_content)
+                    current_section = "content_gaps"
+                    current_content = [line[13:].strip()]
+                elif line.startswith("TYPICAL_STRUCTURES:"):
+                    if current_section:
+                        competitor_research[current_section] = "\n".join(current_content)
+                    current_section = "typical_structures"
+                    current_content = [line[19:].strip()]
+                elif line.startswith("STRENGTHS_WEAKNESSES:"):
+                    if current_section:
+                        competitor_research[current_section] = "\n".join(current_content)
+                    current_section = "strengths_weaknesses"
+                    current_content = [line[21:].strip()]
+                elif line.startswith("DIFFERENTIATION_OPPORTUNITIES:"):
+                    if current_section:
+                        competitor_research[current_section] = "\n".join(current_content)
+                    current_section = "differentiation_opportunities"
+                    current_content = [line[28:].strip()]
+                elif current_section:
+                    current_content.append(line)
+            
+            # Add the last section
+            if current_section:
+                competitor_research[current_section] = "\n".join(current_content)
+            
+            # Add web search metadata if available
+            if web_insights:
+                competitor_research["web_search_used"] = True
+                competitor_research["web_search_timestamp"] = web_insights.get("timestamp", datetime.now().isoformat())
+            else:
+                competitor_research["web_search_used"] = False
+            
+            return competitor_research
+            
+        except Exception as e:
+            logger.error(f"Error in competitor research: {e}")
+            return {
+                "error": str(e),
+                "web_search_used": bool(web_insights)
             } 

@@ -30,49 +30,193 @@ from .seo_optimizer import SEOOptimizer
 from .utils import setup_directory_structure
 
 class ArticlePipeline:
-    """Implements a modular pipeline for article generation."""
+    """Main class for orchestrating the article generation pipeline."""
     
-    def __init__(self, openai_client: OpenAIClient, data_dir: str = "data", use_feedback: bool = True, search_api_key: Optional[str] = None, search_provider: str = "brave"):
+    def __init__(self, openai_client: OpenAIClient, data_dir: Path):
         """Initialize the article pipeline.
         
         Args:
             openai_client: OpenAI client for API interactions
-            data_dir: Base directory for storing article data
-            use_feedback: Whether to use feedback loop for content improvement
-            search_api_key: API key for web search (if None, will try to get from environment)
-            search_provider: Search provider to use ("brave" or "tavily", defaults to "brave")
+            data_dir: Base directory for data storage
         """
         self.openai_client = openai_client
-        self.data_dir = Path(data_dir)
-        self.use_feedback = use_feedback
+        self.data_dir = data_dir
         
-        # Create necessary directory structure
-        self.ideas_dir, self.article_queue_dir, self.projects_dir = setup_directory_structure(self.data_dir)
+        # Initialize web search manager
+        self.web_search = WebSearchManager()
         
-        # Initialize web search manager for internet connectivity
-        self.web_search = WebSearchManager(api_key=search_api_key, provider=search_provider)
-        if self.web_search.is_available():
-            logger.info(f"Article pipeline initialized with {search_provider} web search capability")
-        else:
-            logger.warning("Web search capability not available - using AI-only generation")
-        
-        # Initialize feedback manager if feedback is enabled
-        if self.use_feedback:
-            self.feedback_manager = FeedbackManager(data_dir=data_dir)
-            logger.info("Article pipeline initialized with feedback loop enabled")
-        else:
-            self.feedback_manager = None
-            logger.info("Article pipeline initialized")
-            
-        # Initialize component modules
+        # Initialize components
         self.trend_analyzer = TrendAnalyzer(openai_client, self.web_search)
-        self.idea_generator = IdeaGenerator(openai_client, self.ideas_dir, self.article_queue_dir)
-        self.project_manager = ProjectManager(openai_client, self.projects_dir)
-        self.content_generator = ContentGenerator(openai_client, self.projects_dir)
-        self.article_assembler = ArticleAssembler(openai_client, self.projects_dir)
-        self.seo_optimizer = SEOOptimizer(openai_client, self.projects_dir)
+        self.idea_generator = IdeaGenerator(
+            openai_client=openai_client,
+            ideas_dir=data_dir / "ideas",
+            article_queue_dir=data_dir / "article_queue",
+            trend_analyzer=self.trend_analyzer
+        )
+        self.project_manager = ProjectManager(
+            openai_client=openai_client,
+            projects_dir=data_dir / "projects"
+        )
+        self.content_generator = ContentGenerator(
+            openai_client=openai_client,
+            projects_dir=data_dir / "projects"
+        )
+        self.article_assembler = ArticleAssembler(
+            openai_client=openai_client,
+            projects_dir=data_dir / "projects"
+        )
+        self.seo_optimizer = SEOOptimizer(
+            openai_client=openai_client,
+            projects_dir=data_dir / "projects"
+        )
+        self.feedback_manager = FeedbackManager(str(data_dir))
     
-    def run_pipeline(self, research_topic: str = None, num_ideas: int = 5, 
+    def analyze_trends(self, research_topic: str) -> Dict[str, Any]:
+        """Analyze trends for a research topic.
+        
+        Args:
+            research_topic: Topic to analyze trends for
+            
+        Returns:
+            Dictionary containing trend analysis results
+        """
+        return self.trend_analyzer.analyze_trends(research_topic)
+    
+    def research_competitors(self, research_topic: str) -> Dict[str, Any]:
+        """Research competitors for a topic.
+        
+        Args:
+            research_topic: Topic to research competitors for
+            
+        Returns:
+            Dictionary containing competitor research results
+        """
+        return self.trend_analyzer.research_competitors(research_topic)
+    
+    def generate_ideas(self, research_topic: str, num_ideas: int = 5) -> List[Dict[str, str]]:
+        """Generate article ideas based on research topic.
+        
+        Args:
+            research_topic: Topic to generate ideas for
+            num_ideas: Number of ideas to generate
+            
+        Returns:
+            List of generated idea dictionaries
+        """
+        # First analyze trends and research competitors
+        trend_analysis = self.analyze_trends(research_topic)
+        competitor_research = self.research_competitors(research_topic)
+        
+        # Generate ideas using the analysis
+        return self.idea_generator.generate_ideas(
+            research_topic=research_topic,
+            num_ideas=num_ideas,
+            trend_analysis=trend_analysis,
+            competitor_research=competitor_research
+        )
+    
+    def evaluate_ideas(self, max_ideas: int = 10) -> Optional[str]:
+        """Evaluate and select the best idea from the queue.
+        
+        Args:
+            max_ideas: Maximum number of ideas to evaluate
+            
+        Returns:
+            ID of the selected idea or None if no suitable idea found
+        """
+        return self.idea_generator.evaluate_ideas(max_ideas)
+    
+    def create_project(self) -> Optional[str]:
+        """Create a new project from the selected idea.
+        
+        Returns:
+            Project ID if successful, None otherwise
+        """
+        return self.project_manager.create_project()
+    
+    def generate_outline(self, project_id: str) -> Optional[List[str]]:
+        """Generate an outline for a project.
+        
+        Args:
+            project_id: ID of the project to generate outline for
+            
+        Returns:
+            List of outline sections if successful, None otherwise
+        """
+        return self.content_generator.generate_outline(project_id)
+    
+    def generate_paragraphs(self, project_id: str) -> bool:
+        """Generate paragraphs for a project's outline.
+        
+        Args:
+            project_id: ID of the project to generate paragraphs for
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        return self.content_generator.generate_paragraphs(project_id)
+    
+    def assemble_article(self, project_id: str) -> Optional[Dict[str, str]]:
+        """Assemble the article from generated paragraphs.
+        
+        Args:
+            project_id: ID of the project to assemble article for
+            
+        Returns:
+            Dictionary containing assembled article data if successful, None otherwise
+        """
+        return self.article_assembler.assemble_article(project_id)
+    
+    def refine_article(self, project_id: str) -> Optional[Dict[str, str]]:
+        """Refine the assembled article.
+        
+        Args:
+            project_id: ID of the project to refine article for
+            
+        Returns:
+            Dictionary containing refined article data if successful, None otherwise
+        """
+        return self.article_assembler.refine_article(project_id)
+    
+    def optimize_seo(self, project_id: str) -> Optional[Dict[str, str]]:
+        """Optimize the article for SEO.
+        
+        Args:
+            project_id: ID of the project to optimize SEO for
+            
+        Returns:
+            Dictionary containing SEO-optimized article data if successful, None otherwise
+        """
+        return self.seo_optimizer.optimize_seo(project_id)
+    
+    def publish_to_medium(self, project_id: str, tags: Optional[List[str]] = None, status: str = "draft") -> Dict[str, Any]:
+        """Publish the article to Medium.
+        
+        Args:
+            project_id: ID of the project to publish
+            tags: List of tags to apply to the article
+            status: Publication status ("draft", "public", or "unlisted")
+            
+        Returns:
+            Dictionary containing publishing result data
+        """
+        return self.article_assembler.publish_to_medium(project_id, tags, status)
+    
+    def record_metrics(self, project_id: str) -> bool:
+        """Record performance metrics for a published article.
+        
+        Args:
+            project_id: ID of the project to record metrics for
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.feedback_manager:
+            logger.warning("Feedback manager not initialized - cannot record metrics")
+            return False
+        return self.feedback_manager.record_article_metrics(project_id)
+    
+    def run_full_pipeline(self, research_topic: str = None, num_ideas: int = 5, 
                     max_ideas_to_evaluate: int = 10) -> Optional[Dict[str, str]]:
         """Run the complete article generation pipeline.
         
@@ -86,47 +230,47 @@ class ArticlePipeline:
         """
         try:
             # Step 1: Analyze trends
-            trend_analysis = self.trend_analyzer.analyze_trends(research_topic)
+            trend_analysis = self.analyze_trends(research_topic)
             
             # Step 2: Generate and evaluate ideas
-            ideas = self.idea_generator.generate_ideas(research_topic, num_ideas)
-            selected_idea = self.idea_generator.evaluate_ideas(max_ideas=max_ideas_to_evaluate)
+            ideas = self.generate_ideas(research_topic, num_ideas)
+            selected_idea = self.evaluate_ideas(max_ideas=max_ideas_to_evaluate)
             
             if not selected_idea:
                 logger.error("No suitable idea selected")
                 return None
             
             # Step 3: Create project
-            project_id = self.project_manager.create_project(selected_idea)
+            project_id = self.create_project()
             if not project_id:
                 logger.error("Failed to create project")
                 return None
             
             # Step 4: Generate outline
-            outline = self.content_generator.generate_outline(project_id)
+            outline = self.generate_outline(project_id)
             if not outline:
                 logger.error("Failed to generate outline")
                 return None
             
             # Step 5: Generate paragraphs
-            if not self.content_generator.generate_paragraphs(project_id):
+            if not self.generate_paragraphs(project_id):
                 logger.error("Failed to generate paragraphs")
                 return None
             
             # Step 6: Assemble article
-            article = self.article_assembler.assemble_article(project_id)
+            article = self.assemble_article(project_id)
             if not article:
                 logger.error("Failed to assemble article")
                 return None
             
             # Step 7: Refine article
-            refined_article = self.article_assembler.refine_article(project_id)
+            refined_article = self.refine_article(project_id)
             if not refined_article:
                 logger.error("Failed to refine article")
                 return None
             
             # Step 8: Optimize SEO
-            final_article = self.seo_optimizer.optimize_seo(project_id)
+            final_article = self.optimize_seo(project_id)
             if not final_article:
                 logger.error("Failed to optimize SEO")
                 return None

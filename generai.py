@@ -36,8 +36,9 @@ from src.openai_client import OpenAIClient
 from src.medium_publisher import MediumPublisher
 from src.utils import setup_logging, parse_outline
 
-# Import for modular pipeline approach
+# Import the new modular article pipeline
 from src.article_pipeline import ArticlePipeline
+from src.article_pipeline.utils import setup_pipeline_logging
 
 
 def setup_argparse() -> argparse.ArgumentParser:
@@ -82,6 +83,13 @@ def setup_argparse() -> argparse.ArgumentParser:
     # Modular mode (modular_article_generator.py functionality)
     modular_parser = subparsers.add_parser("modular", help="Modular pipeline approach")
     
+    # OpenAI configuration options
+    modular_parser.add_argument("--openai-api-key", type=str, help="OpenAI API key (if not set in environment)")
+    modular_parser.add_argument("--model", type=str, help="OpenAI model to use")
+    modular_parser.add_argument("--temperature", type=float, help="Temperature for OpenAI API calls")
+    modular_parser.add_argument("--max-tokens", type=int, help="Maximum tokens for OpenAI API calls")
+    modular_parser.add_argument("--cache-dir", type=str, help="Directory for caching API responses")
+    
     # Pipeline control options
     modular_parser.add_argument("--run-full-pipeline", action="store_true", 
                         help="Run the complete article generation pipeline")
@@ -105,8 +113,6 @@ def setup_argparse() -> argparse.ArgumentParser:
                         help="Enable feedback loop mechanism (default based on config)")
     modular_parser.add_argument("--no-feedback", action="store_false", dest="use_feedback",
                         help="Disable feedback loop mechanism")
-    modular_parser.add_argument("--record-metrics", type=str, metavar="PROJECT_ID",
-                        help="Record performance metrics for a published article")
     
     # Individual step options
     modular_parser.add_argument("--analyze-trends", action="store_true",
@@ -128,29 +134,35 @@ def setup_argparse() -> argparse.ArgumentParser:
     modular_parser.add_argument("--create-project", action="store_true",
                         help="Create a project for the next article in the queue")
     
-    modular_parser.add_argument("--generate-outline", type=str, metavar="PROJECT_ID",
-                        help="Generate an outline for the specified project")
+    modular_parser.add_argument("--generate-outline", action="store_true",
+                        help="Generate an outline for the current project")
+    modular_parser.add_argument("--project-id", type=str,
+                        help="Project ID for operations that require it")
     
-    modular_parser.add_argument("--generate-paragraphs", type=str, metavar="PROJECT_ID",
-                        help="Generate paragraphs for the specified project")
+    modular_parser.add_argument("--generate-paragraphs", action="store_true",
+                        help="Generate paragraphs for the current project")
     
-    modular_parser.add_argument("--assemble-article", type=str, metavar="PROJECT_ID",
-                        help="Assemble the article for the specified project")
+    modular_parser.add_argument("--assemble-article", action="store_true",
+                        help="Assemble the article for the current project")
     
-    modular_parser.add_argument("--refine-article", type=str, metavar="PROJECT_ID",
-                        help="Refine the article for the specified project")
+    modular_parser.add_argument("--refine-article", action="store_true",
+                        help="Refine the article for the current project")
     
-    modular_parser.add_argument("--optimize-seo", type=str, metavar="PROJECT_ID",
-                        help="Optimize the article for SEO for the specified project")
+    modular_parser.add_argument("--optimize-seo", action="store_true",
+                        help="Optimize the article for SEO for the current project")
     
     # Medium publishing options for modular mode
-    modular_parser.add_argument("--publish", type=str, metavar="PROJECT_ID",
-                        help="Publish the article for the specified project to Medium")
+    modular_parser.add_argument("--publish-to-medium", action="store_true",
+                        help="Publish the article to Medium")
     modular_parser.add_argument("--tags", type=str,
                         help="Comma-separated list of tags for Medium")
     modular_parser.add_argument("--status", type=str, default="draft", 
                         choices=["draft", "public", "unlisted"],
                         help="Publication status on Medium")
+    
+    # Metrics recording
+    modular_parser.add_argument("--record-metrics", action="store_true",
+                        help="Record performance metrics for the current project")
     
     # Output options for modular mode
     modular_parser.add_argument("--output", type=str,
@@ -218,276 +230,141 @@ def run_simple_mode(args, config):
         publish_to_medium(config, article, args)
 
 
-def run_modular_mode(args, config):
-    """
-    Run the modular pipeline approach (from modular_article_generator.py).
+def run_modular_mode(args: argparse.Namespace, config: Dict[str, Any]) -> None:
+    """Run the article pipeline in modular mode.
     
     Args:
         args: Command line arguments
-        config: Application configuration
+        config: Configuration dictionary
     """
-    # Check if OpenAI API key is available
-    if not config["openai"]["api_key"]:
-        logger.error("OpenAI API key not found. Please set it as OPENAI_API_KEY environment variable.")
-        return
-    
-    # Determine whether to use cache and feedback from args or config
-    use_cache = args.use_cache if hasattr(args, 'use_cache') and args.use_cache is not None else config["openai"].get("use_cache", True)
-    use_feedback = args.use_feedback if hasattr(args, 'use_feedback') and args.use_feedback is not None else config["feedback"].get("enabled", True)
-    
-    # Initialize OpenAI client with caching support
+    # Initialize OpenAI client
     openai_client = OpenAIClient(
-        api_key=config["openai"]["api_key"],
-        model=config["openai"]["model"],
-        use_cache=use_cache,
-        cache_ttl_days=config["cache"].get("ttl_days", 7)
+        api_key=args.openai_api_key or os.getenv("OPENAI_API_KEY"),
+        model=args.model or config.get("model", "gpt-4"),
+        temperature=args.temperature or config.get("temperature", 0.7),
+        max_tokens=args.max_tokens or config.get("max_tokens", 2000),
+        cache_dir=args.cache_dir or config.get("cache_dir", "cache")
     )
     
-    # Determine search provider and API key
-    search_provider = args.search_provider if hasattr(args, "search_provider") else "brave"
-    
-    # Get appropriate API key based on provider
-    search_api_key = None
-    if search_provider == "brave":
-        search_api_key = args.brave_api_key if hasattr(args, "brave_api_key") and args.brave_api_key else os.environ.get("BRAVE_API_KEY")
-        if not search_api_key:
-            logger.warning("Brave API key not found. Web search functionality will be limited.")
-    else:  # tavily
-        search_api_key = args.tavily_api_key if hasattr(args, "tavily_api_key") and args.tavily_api_key else os.environ.get("TAVILY_API_KEY")
-        if not search_api_key:
-            logger.warning("Tavily API key not found. Web search functionality will be limited.")
-    
-    # Initialize article pipeline with feedback loop and web search
+    # Initialize article pipeline
     pipeline = ArticlePipeline(
-        openai_client, 
-        data_dir=args.data_dir,
-        use_feedback=use_feedback,
-        search_api_key=search_api_key,
-        search_provider=search_provider
+        openai_client=openai_client,
+        data_dir=Path(args.data_dir or config.get("data_dir", "data"))
     )
     
-    logger.info(f"Article generator initialized with caching {'enabled' if use_cache else 'disabled'} and feedback {'enabled' if use_feedback else 'disabled'}")
+    # Get default research topic from config
+    default_topic = config.get("research", {}).get("default_topic", "artificial intelligence")
     
-    # Run the requested operation
-    if args.run_full_pipeline:
-        # Run the complete pipeline
-        research_topic = args.research_topic
-        if not research_topic:
-            research_topic = input("Enter a research topic for idea generation: ")
-        
-        final_article = pipeline.run_pipeline(
-            research_topic=research_topic,
-            num_ideas=args.num_ideas,
-            max_ideas_to_evaluate=args.max_ideas
-        )
-        
-        if not final_article:
-            logger.error("Pipeline execution failed.")
-            return
-        
-        # Save to file if requested
-        if args.output:
-            try:
-                with open(args.output, "w") as f:
-                    f.write(f"# {final_article['title']}\n\n{final_article['content']}")
-                logger.info(f"Article saved to {args.output}")
-            except Exception as e:
-                logger.error(f"Error saving article to file: {e}")
+    # Execute requested pipeline steps
+    if args.analyze_trends:
+        research_topic = args.research_topic or config.get("research_topic", default_topic)
+        trend_analysis = pipeline.analyze_trends(research_topic)
+        logger.info("Trend analysis completed")
+    
+    if args.research_competitors:
+        research_topic = args.research_topic or config.get("research_topic", default_topic)
+        competitor_research = pipeline.research_competitors(research_topic)
+        logger.info("Competitor research completed")
+    
+    if args.generate_ideas:
+        research_topic = args.research_topic or config.get("research_topic", default_topic)
+        num_ideas = args.num_ideas or config.get("research", {}).get("num_ideas", 5)
+        ideas = pipeline.generate_ideas(research_topic, num_ideas)
+        logger.info(f"Generated {len(ideas)} ideas")
+    
+    if args.evaluate_ideas:
+        max_ideas = args.max_ideas or config.get("max_ideas", 10)
+        selected_idea = pipeline.evaluate_ideas(max_ideas)
+        if selected_idea:
+            logger.info(f"Selected idea: {selected_idea}")
         else:
-            # Print the article title to console
-            print(f"\n{'=' * 80}\n{final_article['title']}\n{'=' * 80}\n")
-            print("Article generated successfully. View it in the project directory.")
-            print(f"\n{'=' * 80}\n")
-            
-            # Show SEO metadata if available
-            if 'meta_description' in final_article or 'keywords' in final_article:
-                print("\nSEO Metadata:")
-                if 'meta_description' in final_article:
-                    print(f"Meta Description: {final_article['meta_description']}")
-                if 'keywords' in final_article:
-                    print(f"Keywords: {final_article['keywords']}")
-                print(f"\n{'=' * 80}\n")
-        
-        # Publish to Medium if args.publish is a string (project ID)
-        if isinstance(args.publish, str):
-            result = publish_to_medium(config, final_article, args)
-            
-            # Record metrics if publishing was successful and feedback is enabled
-            if result and result.get("success") and use_feedback and pipeline.feedback_manager:
-                logger.info(f"Recording initial metrics for published article: {args.publish}")
-                # Record initial metrics (these would be updated later with actual performance data)
-                pipeline.feedback_manager.record_article_metrics(args.publish, {
-                    "publish_status": result.get("publish_status", "unknown"),
-                    "published_at": datetime.now().isoformat(),
-                    "views": 0,
-                    "reads": 0,
-                    "claps": 0
-                })
-    else:
-        # Run individual steps based on arguments
-        if args.analyze_trends:
-            research_topic = args.research_topic
-            if not research_topic:
-                research_topic = input("Enter a research topic for trend analysis: ")
-            
-            trend_analysis = pipeline.analyze_trends(research_topic)
-            if trend_analysis:
-                print(f"\nTrend Analysis for '{research_topic}':")
-                if "trending_subtopics" in trend_analysis:
-                    print(f"\nTrending Subtopics:\n{trend_analysis['trending_subtopics']}")
-                if "key_questions" in trend_analysis:
-                    print(f"\nKey Questions:\n{trend_analysis['key_questions']}")
-                if "recent_developments" in trend_analysis:
-                    print(f"\nRecent Developments:\n{trend_analysis['recent_developments']}")
-                if "timely_considerations" in trend_analysis:
-                    print(f"\nTimely Considerations:\n{trend_analysis['timely_considerations']}")
-                if "popular_formats" in trend_analysis:
-                    print(f"\nPopular Formats:\n{trend_analysis['popular_formats']}")
-            else:
-                print("Failed to analyze trends.")
-        
-        if args.research_competitors:
-            research_topic = args.research_topic
-            if not research_topic:
-                research_topic = input("Enter a research topic for competitor research: ")
-            
-            competitor_research = pipeline.research_competitors(research_topic)
-            if competitor_research:
-                print(f"\nCompetitor Research for '{research_topic}':")
-                if "common_themes" in competitor_research:
-                    print(f"\nCommon Themes:\n{competitor_research['common_themes']}")
-                if "content_gaps" in competitor_research:
-                    print(f"\nContent Gaps:\n{competitor_research['content_gaps']}")
-                if "typical_structures" in competitor_research:
-                    print(f"\nTypical Structures:\n{competitor_research['typical_structures']}")
-                if "strengths_weaknesses" in competitor_research:
-                    print(f"\nStrengths and Weaknesses:\n{competitor_research['strengths_weaknesses']}")
-                if "differentiation_opportunities" in competitor_research:
-                    print(f"\nDifferentiation Opportunities:\n{competitor_research['differentiation_opportunities']}")
-            else:
-                print("Failed to research competitors.")
-        
-        if args.generate_ideas:
-            research_topic = args.research_topic
-            if not research_topic:
-                research_topic = input("Enter a research topic for idea generation: ")
-            
-            ideas = pipeline.generate_ideas(research_topic, args.num_ideas)
-            if ideas:
-                print(f"\nGenerated {len(ideas)} ideas:")
-                for i, idea in enumerate(ideas):
-                    print(f"\n{i+1}. {idea['title']}")
-                    print(f"   Description: {idea.get('description', 'Not provided')}")
-                    print(f"   Audience: {idea.get('audience', 'Not specified')}")
-                    print(f"   Engagement: {idea.get('engagement', 'Not specified')}")
-            else:
-                print("Failed to generate ideas.")
-        
-        if args.evaluate_ideas:
-            selected_idea_id = pipeline.evaluate_ideas(max_ideas=args.max_ideas)
-            if selected_idea_id:
-                print(f"\nSelected idea with ID: {selected_idea_id}")
-                print("The idea has been moved to the article queue.")
-        
-        if args.create_project:
-            project_id = pipeline.create_project()
-            if project_id:
-                print(f"\nCreated project with ID: {project_id}")
-        
-        if args.generate_outline:
-            outline = pipeline.generate_outline(args.generate_outline)
-            if outline:
-                print(f"\nGenerated outline with {len(outline)} sections:")
-                for i, section in enumerate(outline):
-                    print(f"{i+1}. {section}")
-        
-        if args.generate_paragraphs:
-            success = pipeline.generate_paragraphs(args.generate_paragraphs)
-            if success:
-                print(f"\nGenerated paragraphs for project {args.generate_paragraphs}")
-        
-        if args.assemble_article:
-            assembled_article = pipeline.assemble_article(args.assemble_article)
-            if assembled_article:
-                print(f"\nAssembled article for project {args.assemble_article}")
-                print(f"Title: {assembled_article['title']}")
-        
-        if args.refine_article:
-            final_article = pipeline.refine_article(args.refine_article)
-            if final_article:
-                print(f"\nRefined article for project {args.refine_article}")
-                print(f"Title: {final_article['title']}")
-                
-                # Save to file if requested
-                if args.output:
-                    try:
-                        with open(args.output, "w") as f:
-                            f.write(f"# {final_article['title']}\n\n{final_article['content']}")
-                        logger.info(f"Article saved to {args.output}")
-                    except Exception as e:
-                        logger.error(f"Error saving article to file: {e}")
-        
-        if args.optimize_seo:
-            seo_article = pipeline.optimize_seo(args.optimize_seo)
-            if seo_article:
-                print(f"\nArticle SEO optimized successfully: {seo_article['title']}")
-                print(f"View the SEO optimized article in {args.data_dir}/projects/{args.optimize_seo}/seo_optimized_article.md")
-                print(f"\nSEO Metadata:")
-                print(f"Meta Description: {seo_article.get('meta_description', 'Not available')}")
-                print(f"Keywords: {seo_article.get('keywords', 'Not available')}")
-                if 'additional_recommendations' in seo_article and seo_article['additional_recommendations']:
-                    print(f"\nAdditional SEO Recommendations:\n{seo_article['additional_recommendations']}")
-                
-                # Save to file if requested
-                if args.output:
-                    try:
-                        with open(args.output, "w") as f:
-                            f.write(f"# {seo_article['title']}\n\n{seo_article['content']}")
-                        logger.info(f"SEO optimized article saved to {args.output}")
-                    except Exception as e:
-                        logger.error(f"Error saving SEO optimized article to file: {e}")
-        
-        # Record performance metrics for a published article
-        if args.record_metrics and use_feedback and pipeline.feedback_manager:
-            try:
-                # In a real application, these metrics would come from Medium's API or another analytics source
-                # For demonstration, we'll use sample metrics or prompt the user
-                print(f"\nRecording performance metrics for project: {args.record_metrics}")
-                views = int(input("Enter number of views: "))
-                reads = int(input("Enter number of reads: "))
-                claps = int(input("Enter number of claps/likes: "))
-                
-                metrics = {
-                    "views": views,
-                    "reads": reads,
-                    "claps": claps,
-                    "recorded_at": datetime.now().isoformat()
-                }
-                
-                pipeline.feedback_manager.record_article_metrics(args.record_metrics, metrics)
-                print("Metrics recorded successfully!")
-                
-                # Show performance insights if available
-                insights = pipeline.feedback_manager.get_performance_insights()
-                if insights and insights.get("general_recommendations"):
-                    print("\nContent Strategy Insights:")
-                    for rec in insights["general_recommendations"]:
-                        print(f"- {rec}")
-                    
-            except Exception as e:
-                logger.error(f"Error recording metrics: {e}")
-        
-        # Publish to Medium if args.publish is a string (project ID)
-        if isinstance(args.publish, str):
-            # Load the final article from the project
-            project_dir = Path(args.data_dir) / "projects" / args.publish
-            try:
-                with open(project_dir / "final_article.json", "r") as f:
-                    import json
-                    final_article = json.load(f)
-                publish_to_medium(config, final_article, args)
-            except Exception as e:
-                logger.error(f"Error loading article for publishing: {e}")
+            logger.warning("No suitable idea selected")
+    
+    if args.create_project:
+        project_id = pipeline.create_project()
+        if project_id:
+            logger.info(f"Created project: {project_id}")
+        else:
+            logger.error("Failed to create project")
+    
+    if args.generate_outline:
+        project_id = args.project_id or config.get("project_id")
+        if not project_id:
+            logger.error("Project ID required for outline generation")
+            return
+        outline = pipeline.generate_outline(project_id)
+        if outline:
+            logger.info("Outline generated successfully")
+        else:
+            logger.error("Failed to generate outline")
+    
+    if args.generate_paragraphs:
+        project_id = args.project_id or config.get("project_id")
+        if not project_id:
+            logger.error("Project ID required for paragraph generation")
+            return
+        success = pipeline.generate_paragraphs(project_id)
+        if success:
+            logger.info("Paragraphs generated successfully")
+        else:
+            logger.error("Failed to generate paragraphs")
+    
+    if args.assemble_article:
+        project_id = args.project_id or config.get("project_id")
+        if not project_id:
+            logger.error("Project ID required for article assembly")
+            return
+        article = pipeline.assemble_article(project_id)
+        if article:
+            logger.info("Article assembled successfully")
+        else:
+            logger.error("Failed to assemble article")
+    
+    if args.refine_article:
+        project_id = args.project_id or config.get("project_id")
+        if not project_id:
+            logger.error("Project ID required for article refinement")
+            return
+        refined_article = pipeline.refine_article(project_id)
+        if refined_article:
+            logger.info("Article refined successfully")
+        else:
+            logger.error("Failed to refine article")
+    
+    if args.optimize_seo:
+        project_id = args.project_id or config.get("project_id")
+        if not project_id:
+            logger.error("Project ID required for SEO optimization")
+            return
+        seo_article = pipeline.optimize_seo(project_id)
+        if seo_article:
+            logger.info("SEO optimization completed")
+        else:
+            logger.error("Failed to optimize SEO")
+    
+    if args.publish_to_medium:
+        project_id = args.project_id or config.get("project_id")
+        if not project_id:
+            logger.error("Project ID required for publishing")
+            return
+        tags = args.tags.split(",") if args.tags else None
+        status = args.status or "draft"
+        result = pipeline.publish_to_medium(project_id, tags, status)
+        if result:
+            logger.info("Article published successfully")
+        else:
+            logger.error("Failed to publish article")
+    
+    if args.record_metrics:
+        project_id = args.project_id or config.get("project_id")
+        if not project_id:
+            logger.error("Project ID required for metrics recording")
+            return
+        success = pipeline.record_metrics(project_id)
+        if success:
+            logger.info("Metrics recorded successfully")
+        else:
+            logger.error("Failed to record metrics")
 
 
 def publish_to_medium(config, article, args) -> Dict[str, Any]:

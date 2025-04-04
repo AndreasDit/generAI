@@ -9,6 +9,7 @@ to enhance the article generation process with real-time data.
 
 import os
 import requests
+import time
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
 from abc import ABC, abstractmethod
@@ -60,6 +61,10 @@ class BraveSearchManager(SearchProvider):
         self.api_key = api_key or os.environ.get("BRAVE_API_KEY")
         self.base_url = "https://api.search.brave.com/res/v1/web/search"
         self.init_error = None
+        self.last_request_time = 0
+        self.min_request_interval = 1.0  # Minimum time between requests in seconds
+        self.max_retries = 3
+        self.retry_delay = 2.0  # Delay between retries in seconds
         
         if not self.api_key:
             logger.warning("Brave API key not found. Web search functionality will be limited.")
@@ -97,6 +102,45 @@ class BraveSearchManager(SearchProvider):
         """
         return self.client is not None
     
+    def _make_request(self, headers: Dict[str, str], params: Dict[str, Any]) -> Dict[str, Any]:
+        """Make a request to the Brave Search API with rate limiting and retry logic.
+        
+        Args:
+            headers: Request headers
+            params: Request parameters
+            
+        Returns:
+            Dictionary containing the API response
+        """
+        # Ensure minimum time between requests
+        current_time = time.time()
+        time_since_last_request = current_time - self.last_request_time
+        if time_since_last_request < self.min_request_interval:
+            time.sleep(self.min_request_interval - time_since_last_request)
+        
+        for attempt in range(self.max_retries):
+            try:
+                response = requests.get(self.base_url, headers=headers, params=params)
+                self.last_request_time = time.time()
+                
+                if response.status_code == 429:  # Too Many Requests
+                    if attempt < self.max_retries - 1:
+                        logger.warning(f"Rate limit hit, retrying in {self.retry_delay} seconds...")
+                        time.sleep(self.retry_delay)
+                        continue
+                    else:
+                        response.raise_for_status()
+                
+                response.raise_for_status()
+                return response.json()
+                
+            except requests.exceptions.RequestException as e:
+                if attempt < self.max_retries - 1:
+                    logger.warning(f"Request failed, retrying in {self.retry_delay} seconds...")
+                    time.sleep(self.retry_delay)
+                else:
+                    raise
+    
     def search(self, query: str, search_depth: str = "basic", max_results: int = 5) -> Dict[str, Any]:
         """Search the web for information related to the query.
         
@@ -126,10 +170,8 @@ class BraveSearchManager(SearchProvider):
                 "text_detail": "paragraph" if search_depth == "comprehensive" else "snippet"
             }
             
-            # Execute search
-            response = requests.get(self.base_url, headers=headers, params=params)
-            response.raise_for_status()
-            data = response.json()
+            # Execute search with rate limiting and retry logic
+            data = self._make_request(headers, params)
             
             # Format results to match the expected structure
             results = []

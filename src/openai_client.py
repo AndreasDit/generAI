@@ -7,6 +7,8 @@ Implements caching to avoid redundant API calls and improve performance.
 """
 
 from typing import Dict, List, Optional, Any
+import re
+from datetime import datetime
 
 import openai
 from loguru import logger
@@ -17,7 +19,9 @@ from src.cache_manager import CacheManager
 class OpenAIClient:
     """Client for interacting with OpenAI API with caching support."""
     
-    def __init__(self, api_key: str, model: str = "gpt-4", use_cache: bool = True, cache_ttl_days: int = 7):
+    def __init__(self, api_key: str, model: str = "gpt-4", use_cache: bool = True, 
+                 cache_ttl_days: int = 7, temperature: float = 0.7, max_tokens: int = 2000,
+                 cache_dir: str = "cache"):
         """Initialize the OpenAI client.
         
         Args:
@@ -25,22 +29,28 @@ class OpenAIClient:
             model: OpenAI model to use
             use_cache: Whether to use caching for API calls
             cache_ttl_days: Time-to-live for cache entries in days
+            temperature: Sampling temperature (0.0 to 1.0)
+            max_tokens: Maximum number of tokens to generate
+            cache_dir: Directory for caching API responses
         """
         self.api_key = api_key
         self.model = model
         self.client = openai.OpenAI(api_key=api_key)
         self.use_cache = use_cache
+        self.temperature = temperature
+        self.max_tokens = max_tokens
         
         # Initialize cache manager if caching is enabled
         if self.use_cache:
-            self.cache_manager = CacheManager(cache_dir="cache", cache_ttl_days=cache_ttl_days)
+            self.cache_manager = CacheManager(cache_dir=cache_dir, ttl_days=cache_ttl_days)
             logger.info(f"OpenAI client initialized with model: {model} (caching enabled)")
         else:
             self.cache_manager = None
             logger.info(f"OpenAI client initialized with model: {model} (caching disabled)")
     
     def generate_article(self, topic: str, tone: str = "informative", 
-                        length: str = "medium", outline: Optional[List[str]] = None) -> Dict[str, str]:
+                        length: str = "medium", outline: Optional[List[str]] = None,
+                        temperature: Optional[float] = None, max_tokens: Optional[int] = None) -> Dict[str, str]:
         """Generate an article using OpenAI.
         
         Args:
@@ -48,10 +58,16 @@ class OpenAIClient:
             tone: The tone of the article (informative, casual, professional, etc.)
             length: The length of the article (short, medium, long)
             outline: Optional outline of sections to include
+            temperature: Sampling temperature (0.0 to 1.0), defaults to instance value
+            max_tokens: Maximum number of tokens to generate, defaults to instance value
         
         Returns:
             Dictionary containing title and content of the article
         """
+        # Use instance values if not specified
+        temperature = temperature if temperature is not None else self.temperature
+        max_tokens = max_tokens if max_tokens is not None else self.max_tokens
+        
         # Define length in words
         length_map = {
             "short": "800-1000 words",
@@ -95,7 +111,9 @@ class OpenAIClient:
             "tone": tone,
             "length": length,
             "outline": outline,
-            "model": self.model
+            "model": self.model,
+            "temperature": temperature,
+            "max_tokens": max_tokens
         }
         
         try:
@@ -113,8 +131,8 @@ class OpenAIClient:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7,
-                max_tokens=4000,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
             
             content = response.choices[0].message.content
@@ -149,18 +167,22 @@ class OpenAIClient:
             logger.error(f"Error generating article: {e}")
             return {"title": "", "content": ""}
     
-    def chat_completion(self, messages: List[Dict[str, str]], temperature: float = 0.7, 
-                       max_tokens: int = 1000) -> Optional[str]:
+    def chat_completion(self, messages: List[Dict[str, str]], temperature: Optional[float] = None, 
+                       max_tokens: Optional[int] = None) -> Optional[str]:
         """Make a chat completion API call with caching support.
         
         Args:
             messages: List of message dictionaries with role and content
-            temperature: Sampling temperature (0.0 to 1.0)
-            max_tokens: Maximum number of tokens to generate
+            temperature: Sampling temperature (0.0 to 1.0), defaults to instance value
+            max_tokens: Maximum number of tokens to generate, defaults to instance value
             
         Returns:
             Generated text or None if an error occurred
         """
+        # Use instance values if not specified
+        temperature = temperature if temperature is not None else self.temperature
+        max_tokens = max_tokens if max_tokens is not None else self.max_tokens
+        
         # Create request parameters for cache lookup
         request_params = {
             "type": "chat_completion",
@@ -199,7 +221,8 @@ class OpenAIClient:
             return None
             
     def generate_article_ideas(self, research_topic: str, trend_analysis: Dict[str, Any] = None, 
-                             competitor_research: Dict[str, Any] = {}, num_ideas: int = 5) -> List[Dict[str, Any]]:
+                             competitor_research: Dict[str, Any] = {}, num_ideas: int = 5,
+                             temperature: Optional[float] = None, max_tokens: Optional[int] = None) -> List[Dict[str, Any]]:
         """Generate article ideas based on research topic, trend analysis, and competitor research.
         
         Args:
@@ -207,10 +230,16 @@ class OpenAIClient:
             trend_analysis: Optional trend analysis data
             competitor_research: Optional competitor research data
             num_ideas: Number of ideas to generate
+            temperature: Sampling temperature (0.0 to 1.0), defaults to instance value
+            max_tokens: Maximum number of tokens to generate, defaults to instance value
             
         Returns:
             List of generated ideas with metadata
         """
+        # Use instance values if not specified
+        temperature = temperature if temperature is not None else self.temperature
+        max_tokens = max_tokens if max_tokens is not None else self.max_tokens
+        
         logger.info(f"Generating {num_ideas} article ideas for topic: {research_topic}")
         
         # Construct the prompt for idea generation
@@ -249,160 +278,237 @@ class OpenAIClient:
         4. Key keywords (5-7 keywords)
         
         Format each idea as follows:
-        TITLE: [Title]
-        SUMMARY: [Summary]
+        IDEA 1:
+        TITLE: [Article title]
+        SUMMARY: [Brief summary]
         AUDIENCE: [Target audience]
-        KEYWORDS: [keyword1, keyword2, keyword3, ...]
-        
-        Make each idea unique and specific. Focus on providing value to readers and addressing their needs.
+        KEYWORDS: [Comma-separated keywords]
+        ---
+        IDEA 2:
+        ...
         """
         
+        # Create request parameters for cache lookup
+        request_params = {
+            "type": "idea_generation",
+            "research_topic": research_topic,
+            "trend_analysis": trend_analysis,
+            "competitor_research": competitor_research,
+            "num_ideas": num_ideas,
+            "model": self.model,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+        
         try:
+            # Check cache if enabled
+            if self.use_cache and self.cache_manager:
+                cached_response = self.cache_manager.get(request_params)
+                if cached_response:
+                    logger.info(f"Using cached ideas for topic: '{research_topic}'")
+                    return cached_response
+            
+            logger.info(f"Generating {num_ideas} ideas for topic: '{research_topic}'")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.8,
-                max_tokens=2000,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
             
             content = response.choices[0].message.content
             
-            # Parse the ideas
+            # Parse the ideas from the response
             ideas = []
-            current_idea = {}
-            lines = content.strip().split("\n")
+            idea_blocks = content.split("---")
             
-            for line in lines:
-                line = line.strip()
-                if not line:
+            for block in idea_blocks:
+                if not block.strip():
                     continue
-                    
-                if line.startswith("TITLE:"):
-                    # If we have a current idea, add it to the list
-                    if current_idea and "title" in current_idea:
-                        ideas.append(current_idea)
-                    
-                    # Start a new idea
-                    current_idea = {"title": line[6:].strip()}
-                elif line.startswith("SUMMARY:") and current_idea:
-                    current_idea["summary"] = line[8:].strip()
-                elif line.startswith("AUDIENCE:") and current_idea:
-                    current_idea["audience"] = line[9:].strip()
-                elif line.startswith("KEYWORDS:") and current_idea:
-                    keywords_text = line[9:].strip()
-                    keywords = [k.strip() for k in keywords_text.split(",")]
-                    current_idea["keywords"] = keywords
+                
+                idea = {}
+                
+                # Extract title
+                title_match = re.search(r"TITLE:\s*(.*?)(?:\n|$)", block)
+                if title_match:
+                    idea["title"] = title_match.group(1).strip()
+                
+                # Extract summary
+                summary_match = re.search(r"SUMMARY:\s*(.*?)(?:\n|$)", block)
+                if summary_match:
+                    idea["summary"] = summary_match.group(1).strip()
+                
+                # Extract audience
+                audience_match = re.search(r"AUDIENCE:\s*(.*?)(?:\n|$)", block)
+                if audience_match:
+                    idea["audience"] = audience_match.group(1).strip()
+                
+                # Extract keywords
+                keywords_match = re.search(r"KEYWORDS:\s*(.*?)(?:\n|$)", block)
+                if keywords_match:
+                    keywords_str = keywords_match.group(1).strip()
+                    idea["keywords"] = [k.strip() for k in keywords_str.split(",")]
+                
+                # Add metadata
+                idea["research_topic"] = research_topic
+                idea["created_at"] = datetime.now().isoformat()
+                
+                ideas.append(idea)
             
-            # Add the last idea if it exists
-            if current_idea and "title" in current_idea:
-                ideas.append(current_idea)
+            # Cache the response if caching is enabled
+            if self.use_cache and self.cache_manager:
+                self.cache_manager.set(request_params, ideas)
             
-            # Limit to the requested number of ideas
-            ideas = ideas[:num_ideas]
-            
-            logger.info(f"Generated {len(ideas)} article ideas")
+            logger.info(f"Generated {len(ideas)} ideas for topic: '{research_topic}'")
             return ideas
             
         except Exception as e:
-            logger.error(f"Error generating article ideas: {e}")
+            logger.error(f"Error generating ideas: {e}")
             return []
     
-    def evaluate_article_ideas(self, ideas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Evaluate article ideas and score them based on potential engagement and value.
+    def evaluate_article_ideas(self, ideas: List[Dict[str, Any]], temperature: Optional[float] = None, 
+                             max_tokens: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Evaluate a list of article ideas and rank them by potential.
         
         Args:
             ideas: List of article ideas to evaluate
+            temperature: Sampling temperature (0.0 to 1.0), defaults to instance value
+            max_tokens: Maximum number of tokens to generate, defaults to instance value
             
         Returns:
             List of evaluated ideas with scores and feedback
         """
-        logger.info(f"Evaluating {len(ideas)} article ideas")
+        # Use instance values if not specified
+        temperature = temperature if temperature is not None else self.temperature
+        max_tokens = max_tokens if max_tokens is not None else self.max_tokens
         
         if not ideas:
             logger.warning("No ideas provided for evaluation")
             return []
         
+        logger.info(f"Evaluating {len(ideas)} article ideas")
+        
         # Construct the prompt for idea evaluation
         system_prompt = (
             "You are an expert content strategist who evaluates article ideas. "
-            "Your evaluations should be based on potential engagement, value to readers, "
-            "uniqueness, and feasibility."
+            "Your evaluation should consider factors like uniqueness, value to readers, "
+            "searchability, and potential for engagement."
         )
         
-        # Format ideas for the prompt
+        # Format the ideas for evaluation
         ideas_text = ""
         for i, idea in enumerate(ideas, 1):
-            ideas_text += f"\nIDEA {i}:\n"
-            ideas_text += f"ID: {idea.get('id', f'idea{i}')}\n"
+            ideas_text += f"IDEA {i}:\n"
             ideas_text += f"TITLE: {idea.get('title', 'No title')}\n"
             ideas_text += f"SUMMARY: {idea.get('summary', 'No summary')}\n"
-            ideas_text += f"AUDIENCE: {idea.get('audience', 'No audience')}\n"
-            keywords = idea.get('keywords', [])
-            ideas_text += f"KEYWORDS: {', '.join(keywords) if keywords else 'None'}\n"
+            ideas_text += f"AUDIENCE: {idea.get('audience', 'No audience specified')}\n"
+            ideas_text += f"KEYWORDS: {', '.join(idea.get('keywords', []))}\n"
+            ideas_text += "---\n"
         
-        user_prompt = f"""Evaluate the following article ideas:{ideas_text}
+        user_prompt = f"""Evaluate the following article ideas and rank them by potential success.
+        
+        {ideas_text}
         
         For each idea, provide:
-        1. A score from 0-100 based on potential engagement, value, uniqueness, and feasibility
-        2. Brief feedback explaining the score and suggesting improvements
+        1. A score from 1-10 (10 being best)
+        2. Strengths (2-3 points)
+        3. Weaknesses (2-3 points)
+        4. Suggestions for improvement
         
-        Format your evaluation as follows for each idea:
-        IDEA_ID: [ID from the input]
-        SCORE: [0-100]
-        FEEDBACK: [Your feedback and suggestions]
-        
-        Be objective and constructive in your evaluations.
+        Format your evaluation as follows:
+        IDEA 1:
+        SCORE: [1-10]
+        STRENGTHS: [List of strengths]
+        WEAKNESSES: [List of weaknesses]
+        SUGGESTIONS: [Improvement suggestions]
+        ---
+        IDEA 2:
+        ...
         """
         
+        # Create request parameters for cache lookup
+        request_params = {
+            "type": "idea_evaluation",
+            "ideas": ideas,
+            "model": self.model,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+        
         try:
+            # Check cache if enabled
+            if self.use_cache and self.cache_manager:
+                cached_response = self.cache_manager.get(request_params)
+                if cached_response:
+                    logger.info("Using cached idea evaluation")
+                    return cached_response
+            
+            logger.info("Evaluating article ideas")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.5,
-                max_tokens=2000,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
             
             content = response.choices[0].message.content
             
             # Parse the evaluations
-            evaluations = []
-            current_eval = {}
-            lines = content.strip().split("\n")
+            evaluated_ideas = []
+            idea_blocks = content.split("---")
             
-            for line in lines:
-                line = line.strip()
-                if not line:
+            for i, block in enumerate(idea_blocks):
+                if not block.strip() or i >= len(ideas):
                     continue
-                    
-                if line.startswith("IDEA_ID:"):
-                    # If we have a current evaluation, add it to the list
-                    if current_eval and "id" in current_eval:
-                        evaluations.append(current_eval)
-                    
-                    # Start a new evaluation
-                    current_eval = {"id": line[8:].strip()}
-                elif line.startswith("SCORE:") and current_eval:
-                    try:
-                        score = int(line[6:].strip())
-                        current_eval["score"] = score
-                    except ValueError:
-                        current_eval["score"] = 0
-                elif line.startswith("FEEDBACK:") and current_eval:
-                    current_eval["feedback"] = line[9:].strip()
+                
+                # Get the original idea
+                original_idea = ideas[i]
+                evaluated_idea = original_idea.copy()
+                
+                # Extract score
+                score_match = re.search(r"SCORE:\s*(\d+)", block)
+                if score_match:
+                    evaluated_idea["score"] = int(score_match.group(1))
+                
+                # Extract strengths
+                strengths_match = re.search(r"STRENGTHS:\s*(.*?)(?:\nWEAKNESSES:|$)", block, re.DOTALL)
+                if strengths_match:
+                    strengths_text = strengths_match.group(1).strip()
+                    evaluated_idea["strengths"] = [s.strip() for s in strengths_text.split("\n") if s.strip()]
+                
+                # Extract weaknesses
+                weaknesses_match = re.search(r"WEAKNESSES:\s*(.*?)(?:\nSUGGESTIONS:|$)", block, re.DOTALL)
+                if weaknesses_match:
+                    weaknesses_text = weaknesses_match.group(1).strip()
+                    evaluated_idea["weaknesses"] = [w.strip() for w in weaknesses_text.split("\n") if w.strip()]
+                
+                # Extract suggestions
+                suggestions_match = re.search(r"SUGGESTIONS:\s*(.*?)(?:\n---|$)", block, re.DOTALL)
+                if suggestions_match:
+                    suggestions_text = suggestions_match.group(1).strip()
+                    evaluated_idea["suggestions"] = [s.strip() for s in suggestions_text.split("\n") if s.strip()]
+                
+                # Add evaluation timestamp
+                evaluated_idea["evaluated_at"] = datetime.now().isoformat()
+                
+                evaluated_ideas.append(evaluated_idea)
             
-            # Add the last evaluation if it exists
-            if current_eval and "id" in current_eval:
-                evaluations.append(current_eval)
+            # Sort by score (highest first)
+            evaluated_ideas.sort(key=lambda x: x.get("score", 0), reverse=True)
             
-            logger.info(f"Evaluated {len(evaluations)} article ideas")
-            return evaluations
+            # Cache the response if caching is enabled
+            if self.use_cache and self.cache_manager:
+                self.cache_manager.set(request_params, evaluated_ideas)
+            
+            logger.info(f"Evaluated {len(evaluated_ideas)} article ideas")
+            return evaluated_ideas
             
         except Exception as e:
             logger.error(f"Error evaluating article ideas: {e}")
-            return []
+            return ideas  # Return original ideas if evaluation fails

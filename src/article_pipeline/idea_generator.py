@@ -7,40 +7,106 @@ from typing import Dict, List, Any, Optional
 from loguru import logger
 
 from src.openai_client import OpenAIClient
+from .trend_analyzer import TrendAnalyzer
 
 class IdeaGenerator:
     """Handles article idea generation and evaluation."""
     
-    def __init__(self, openai_client: OpenAIClient, ideas_dir: Path, article_queue_dir: Path):
+    def __init__(self, openai_client: OpenAIClient, ideas_dir: Path, article_queue_dir: Path, trend_analyzer: Optional[TrendAnalyzer] = None):
         """Initialize the idea generator.
         
         Args:
             openai_client: OpenAI client for API interactions
             ideas_dir: Directory to store generated ideas
             article_queue_dir: Directory for queued articles
+            trend_analyzer: Trend analyzer for research insights (optional)
         """
         self.openai_client = openai_client
         self.ideas_dir = ideas_dir
         self.article_queue_dir = article_queue_dir
+        self.trend_analyzer = trend_analyzer
+        self._idea_counter = 0  # Counter for generating unique idea IDs
     
-    def generate_ideas(self, research_topic: str, num_ideas: int = 5) -> List[Dict[str, str]]:
+    def generate_ideas(self, research_topic: str, num_ideas: int = 5, trend_analysis: Optional[Dict[str, Any]] = None, competitor_research: Optional[Dict[str, Any]] = None) -> List[Dict[str, str]]:
         """Generate article ideas based on the research topic.
         
         Args:
             research_topic: Topic to generate ideas for
             num_ideas: Number of ideas to generate
+            trend_analysis: Optional pre-existing trend analysis
+            competitor_research: Optional pre-existing competitor research
             
         Returns:
             List of generated idea dictionaries
         """
         logger.info(f"Generating {num_ideas} ideas for topic: {research_topic}")
         
+        # Get trend analysis if not provided
+        if trend_analysis is None and self.trend_analyzer:
+            logger.info(f"Analyzing trends for topic: {research_topic}")
+            trend_analysis = self.trend_analyzer.analyze_trends(research_topic)
+        
+        # Get competitor research if not provided
+        if competitor_research is None and self.trend_analyzer:
+            logger.info(f"Researching competitors for topic: {research_topic}")
+            competitor_research = self.trend_analyzer.research_competitors(research_topic)
+        
         system_prompt = (
             "You are an expert content strategist who generates engaging article ideas. "
             "Your ideas should be unique, valuable, and aligned with current trends."
         )
         
-        user_prompt = f"""Generate {num_ideas} unique article ideas related to '{research_topic}'.
+        # Include trend analysis in the prompt if available
+        trend_analysis_text = ""
+        if trend_analysis:
+            trend_analysis_text = "\n\nHere is the trend analysis to inform your ideas:\n"
+            
+            if "trending_subtopics" in trend_analysis:
+                trend_analysis_text += "\nTrending Subtopics:\n"
+                trend_analysis_text += trend_analysis["trending_subtopics"] + "\n"
+            
+            if "key_questions" in trend_analysis:
+                trend_analysis_text += "\nKey Questions:\n"
+                trend_analysis_text += trend_analysis["key_questions"] + "\n"
+            
+            if "recent_developments" in trend_analysis:
+                trend_analysis_text += "\nRecent Developments:\n"
+                trend_analysis_text += trend_analysis["recent_developments"] + "\n"
+            
+            if "timely_considerations" in trend_analysis:
+                trend_analysis_text += "\nTimely Considerations:\n"
+                trend_analysis_text += trend_analysis["timely_considerations"] + "\n"
+            
+            if "popular_formats" in trend_analysis:
+                trend_analysis_text += "\nPopular Formats:\n"
+                trend_analysis_text += trend_analysis["popular_formats"] + "\n"
+        
+        # Include competitor research in the prompt if available
+        competitor_research_text = ""
+        if competitor_research:
+            competitor_research_text = "\n\nHere is the competitor research to inform your ideas:\n"
+            
+            if "common_themes" in competitor_research:
+                competitor_research_text += "\nCommon Themes:\n"
+                competitor_research_text += competitor_research["common_themes"] + "\n"
+            
+            if "content_gaps" in competitor_research:
+                competitor_research_text += "\nContent Gaps:\n"
+                competitor_research_text += competitor_research["content_gaps"] + "\n"
+            
+            if "typical_structures" in competitor_research:
+                competitor_research_text += "\nTypical Structures:\n"
+                competitor_research_text += competitor_research["typical_structures"] + "\n"
+            
+            if "strengths_weaknesses" in competitor_research:
+                competitor_research_text += "\nStrengths and Weaknesses:\n"
+                competitor_research_text += competitor_research["strengths_weaknesses"] + "\n"
+            
+            if "differentiation_opportunities" in competitor_research:
+                competitor_research_text += "\nDifferentiation Opportunities:\n"
+                competitor_research_text += competitor_research["differentiation_opportunities"] + "\n"
+        
+        user_prompt = f"""Generate {num_ideas} unique article ideas related to '{research_topic}'.{trend_analysis_text}{competitor_research_text}
         
         For each idea, provide:
         1. A compelling title
@@ -235,12 +301,14 @@ class IdeaGenerator:
             ID of the saved idea
         """
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        idea_id = f"idea_{timestamp}"
+        self._idea_counter += 1  # Increment counter for each idea
+        idea_id = f"idea_{timestamp}_{self._idea_counter}"
         
         idea["id"] = idea_id
         idea["timestamp"] = timestamp
         
         idea_file = self.ideas_dir / f"{idea_id}.json"
+        logger.info(f"Write idea to {idea_file}")
         with open(idea_file, "w") as f:
             json.dump(idea, f, indent=2)
         

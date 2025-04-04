@@ -53,6 +53,11 @@ class ConfigManager:
                 "enabled": os.getenv("FEEDBACK_ENABLED", "true").lower() == "true",
                 "apply_to_idea_evaluation": os.getenv("FEEDBACK_APPLY_TO_IDEA_EVALUATION", "true").lower() == "true",
                 "min_articles_for_insights": int(os.getenv("FEEDBACK_MIN_ARTICLES", "3")),
+            },
+            "research": {
+                "default_topic": os.getenv("RESEARCH_DEFAULT_TOPIC", "artificial intelligence"),
+                "num_ideas": int(os.getenv("RESEARCH_NUM_IDEAS", "5")),
+                "max_ideas": int(os.getenv("RESEARCH_MAX_IDEAS", "10")),
             }
         }
         return config

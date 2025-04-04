@@ -25,19 +25,23 @@ from loguru import logger
 
 from src.openai_client import OpenAIClient
 from src.web_search import WebSearchManager
+from src.feedback_manager import FeedbackManager
+from .article_pipeline import ArticlePipeline
 
+__all__ = ['ArticlePipeline']
 
 class ArticlePipeline:
     """Implements a modular pipeline for article generation."""
     
-    def __init__(self, openai_client: OpenAIClient, data_dir: str = "data", use_feedback: bool = True, tavily_api_key: Optional[str] = None):
+    def __init__(self, openai_client: OpenAIClient, data_dir: str = "data", use_feedback: bool = True, search_api_key: Optional[str] = None, search_provider: str = "brave"):
         """Initialize the article pipeline.
         
         Args:
             openai_client: OpenAI client for API interactions
             data_dir: Base directory for storing article data
             use_feedback: Whether to use feedback loop for content improvement
-            tavily_api_key: API key for Tavily web search (if None, will try to get from environment)
+            search_api_key: API key for web search (if None, will try to get from environment)
+            search_provider: Search provider to use ("brave" or "tavily", defaults to "brave")
         """
         self.openai_client = openai_client
         self.data_dir = Path(data_dir)
@@ -47,15 +51,14 @@ class ArticlePipeline:
         self._setup_directory_structure()
         
         # Initialize web search manager for internet connectivity
-        self.web_search = WebSearchManager(api_key=tavily_api_key)
+        self.web_search = WebSearchManager(api_key=search_api_key, provider=search_provider)
         if self.web_search.is_available():
-            logger.info("Article pipeline initialized with web search capability")
+            logger.info(f"Article pipeline initialized with {search_provider} web search capability")
         else:
             logger.warning("Web search capability not available - using AI-only generation")
         
         # Initialize feedback manager if feedback is enabled
         if self.use_feedback:
-            from src.feedback_manager import FeedbackManager
             self.feedback_manager = FeedbackManager(data_dir=data_dir)
             logger.info("Article pipeline initialized with feedback loop enabled")
         else:
@@ -78,6 +81,36 @@ class ArticlePipeline:
         self.projects_dir.mkdir(exist_ok=True)
         
         logger.info(f"Directory structure set up in {self.data_dir}")
+    
+    def _parse_trend_analysis(self, content: str) -> Dict[str, Any]:
+        """Parse the trend analysis response from OpenAI.
+        
+        Args:
+            content: Raw text response from OpenAI
+            
+        Returns:
+            Dictionary containing parsed trend analysis data
+        """
+        # Parse the trend analysis into a structured format
+        trends = []
+        summary = "Summary of trends based on analysis"
+        
+        # Extract trending subtopics
+        if "TRENDING_SUBTOPICS:" in content:
+            subtopics_text = content.split("TRENDING_SUBTOPICS:")[1].split("KEY_QUESTIONS:")[0].strip()
+            subtopics = [s.strip() for s in subtopics_text.split(",")]
+            
+            # Create trend objects
+            for subtopic in subtopics:
+                trends.append({
+                    "name": subtopic,
+                    "description": f"Description of {subtopic.lower()}"
+                })
+        
+        return {
+            "trends": trends,
+            "summary": summary
+        }
     
     def analyze_trends(self, research_topic: str) -> Dict[str, Any]:
         """Analyze current trends related to the research topic.
@@ -228,6 +261,259 @@ class ArticlePipeline:
             
         except Exception as e:
             logger.error(f"Error analyzing trends: {e}")
+            return {}
+    
+    def get_ideas(self) -> List[Dict[str, Any]]:
+        """Get all available article ideas from the ideas directory.
+        
+        Returns:
+            List of article ideas with metadata
+        """
+        logger.info("Getting available article ideas")
+        
+        ideas = []
+        try:
+            # Get all JSON files in the ideas directory that contain article ideas
+            idea_files = list(self.ideas_dir.glob("idea_*.json"))
+            
+            for idea_file in idea_files:
+                try:
+                    with open(idea_file, "r") as f:
+                        idea_data = json.load(f)
+                        ideas.append(idea_data)
+                except Exception as e:
+                    logger.error(f"Error reading idea file {idea_file}: {e}")
+            
+            logger.info(f"Found {len(ideas)} article ideas")
+            return ideas
+            
+        except Exception as e:
+            logger.error(f"Error getting article ideas: {e}")
+            return []
+    
+    def evaluate_ideas(self, max_ideas: int = 10) -> List[Dict[str, Any]]:
+        """Evaluate article ideas and select the best one.
+        
+        Args:
+            max_ideas: Maximum number of ideas to evaluate
+            
+        Returns:
+            List of evaluated ideas with scores
+        """
+        logger.info("Evaluating article ideas")
+        
+        # Get available ideas
+        ideas = self.get_ideas()
+        
+        if not ideas:
+            logger.warning("No article ideas found to evaluate")
+            return []
+        
+        # Limit the number of ideas to evaluate
+        if len(ideas) > max_ideas:
+            logger.info(f"Limiting evaluation to {max_ideas} ideas")
+            ideas = ideas[:max_ideas]
+        
+        try:
+            # Evaluate ideas using OpenAI
+            evaluations = self.openai_client.evaluate_article_ideas(ideas)
+            
+            # Save evaluations
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            evaluation_file = self.ideas_dir / f"evaluation_{timestamp}.json"
+            
+            with open(evaluation_file, "w") as f:
+                json.dump(evaluations, f, indent=2)
+            
+            # Sort evaluations by score (highest first)
+            evaluations.sort(key=lambda x: x.get("score", 0), reverse=True)
+            
+            # If we have a top idea, add it to the article queue
+            if evaluations and len(evaluations) > 0:
+                top_idea = evaluations[0]
+                idea_id = top_idea.get("id")
+                
+                # Find the corresponding idea data
+                idea_data = next((idea for idea in ideas if idea.get("id") == idea_id), None)
+                
+                if idea_data:
+                    # Add to article queue
+                    queue_file = self.article_queue_dir / f"queued_{idea_id}.json"
+                    
+                    with open(queue_file, "w") as f:
+                        json.dump({
+                            "idea": idea_data,
+                            "evaluation": top_idea,
+                            "queued_at": datetime.now().isoformat()
+                        }, f, indent=2)
+                    
+                    logger.info(f"Added top idea '{idea_data.get('title')}' to article queue")
+            
+            logger.info(f"Completed evaluation of {len(evaluations)} ideas")
+            return evaluations
+            
+        except Exception as e:
+            logger.error(f"Error evaluating article ideas: {e}")
+            return []
+    
+    def generate_ideas(self, research_topic: str, num_ideas: int = 5) -> List[Dict[str, Any]]:
+        """Generate article ideas based on trend analysis and competitor research.
+        
+        Args:
+            research_topic: General topic to research for ideas
+            num_ideas: Number of ideas to generate
+            
+        Returns:
+            List of generated ideas with metadata
+        """
+        logger.info(f"Generating {num_ideas} ideas for topic: {research_topic}")
+        
+        # First perform trend analysis and competitor research
+        trend_analysis = self.analyze_trends(research_topic)
+        competitor_research = self.research_competitors(research_topic)
+        
+        try:
+            # Generate ideas using OpenAI
+            ideas = self.openai_client.generate_article_ideas(
+                research_topic=research_topic,
+                trend_analysis=trend_analysis,
+                competitor_research=competitor_research,
+                num_ideas=num_ideas
+            )
+            
+            # Save ideas to files
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            
+            for i, idea in enumerate(ideas):
+                # Generate a unique ID for the idea
+                idea_id = f"idea_{timestamp}_{i+1}"
+                idea["id"] = idea_id
+                idea["research_topic"] = research_topic
+                idea["created_at"] = datetime.now().isoformat()
+                
+                # Save to file
+                idea_file = self.ideas_dir / f"idea_{idea_id}.json"
+                
+                with open(idea_file, "w") as f:
+                    json.dump(idea, f, indent=2)
+            
+            logger.info(f"Generated and saved {len(ideas)} ideas for topic: {research_topic}")
+            return ideas
+            
+        except Exception as e:
+            logger.error(f"Error generating article ideas: {e}")
+            return []
+            
+    def get_idea_by_id(self, idea_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific article idea by its ID.
+        
+        Args:
+            idea_id: ID of the idea to retrieve
+            
+        Returns:
+            Article idea data or None if not found
+        """
+        logger.info(f"Getting article idea with ID: {idea_id}")
+        
+        try:
+            # Look for the idea file in the ideas directory
+            idea_file = self.ideas_dir / f"idea_{idea_id}.json"
+            
+            if not idea_file.exists():
+                # Also check for files that might contain the ID in their name
+                potential_files = list(self.ideas_dir.glob(f"*{idea_id}*.json"))
+                if not potential_files:
+                    logger.warning(f"No idea found with ID: {idea_id}")
+                    return None
+                idea_file = potential_files[0]
+            
+            # Read the idea data
+            with open(idea_file, "r") as f:
+                idea_data = json.load(f)
+            
+            logger.info(f"Found idea: {idea_data.get('title', 'Unknown title')}")
+            return idea_data
+            
+        except Exception as e:
+            logger.error(f"Error getting idea by ID: {e}")
+            return None
+    
+    def create_project(self, idea_id: Optional[str] = None) -> Dict[str, Any]:
+        """Create a new project based on a selected article idea.
+        
+        Args:
+            idea_id: ID of the idea to use for the project (if None, uses the next idea in the queue)
+            
+        Returns:
+            Project metadata
+        """
+        logger.info("Creating new article project")
+        
+        # Get the idea to use for the project
+        idea_data = None
+        
+        if idea_id:
+            # Use the specified idea
+            idea_data = self.get_idea_by_id(idea_id)
+            if not idea_data:
+                logger.error(f"Failed to create project: Idea with ID {idea_id} not found")
+                return {}
+        else:
+            # Use the next idea in the queue
+            queue_files = list(self.article_queue_dir.glob("queued_*.json"))
+            if not queue_files:
+                logger.error("Failed to create project: No ideas in the queue")
+                return {}
+            
+            # Use the first idea in the queue
+            with open(queue_files[0], "r") as f:
+                queue_data = json.load(f)
+                idea_data = queue_data.get("idea")
+        
+        if not idea_data:
+            logger.error("Failed to create project: No valid idea data found")
+            return {}
+        
+        try:
+            # Generate a unique project ID
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            title = idea_data.get("title", "Untitled Article")
+            
+            # Create a sanitized version of the title for the project ID
+            filename = title.lower().replace(" ", "_")[:30]
+            sanitized = "".join(c if c.isalnum() or c in "_- " else "_" for c in filename)
+            project_id = f"{sanitized}_{timestamp}"
+            
+            # Create project directory
+            project_dir = self.projects_dir / project_id
+            project_dir.mkdir(exist_ok=True)
+            
+            # Create metadata file
+            metadata = {
+                "project_id": project_id,
+                "title": idea_data.get("title"),
+                "summary": idea_data.get("summary"),
+                "audience": idea_data.get("audience"),
+                "keywords": idea_data.get("keywords", []),
+                "created_at": datetime.now().isoformat(),
+                "status": "initialized",
+                "idea_id": idea_data.get("id")
+            }
+            
+            metadata_file = project_dir / "metadata.json"
+            with open(metadata_file, "w") as f:
+                json.dump(metadata, f, indent=2)
+            
+            # Create directories for project components
+            (project_dir / "outline").mkdir(exist_ok=True)
+            (project_dir / "paragraphs").mkdir(exist_ok=True)
+            (project_dir / "article").mkdir(exist_ok=True)
+            
+            logger.info(f"Created project '{project_id}' for article: {title}")
+            return metadata
+            
+        except Exception as e:
+            logger.error(f"Error creating project: {e}")
             return {}
     
     def research_competitors(self, research_topic: str) -> Dict[str, Any]:
@@ -722,7 +1008,7 @@ class ArticlePipeline:
             
         except Exception as e:
             logger.error(f"Error evaluating ideas: {e}")
-            return None
+            return ''
     
     def _get_recent_articles(self, max_articles: int = 5) -> List[Dict[str, Any]]:
         """Get information about recently published articles.
@@ -1027,6 +1313,36 @@ class ArticlePipeline:
         sanitized = "".join(c if c.isalnum() or c in "_- " else "_" for c in filename)
         sanitized = sanitized.replace(" ", "_").lower()
         return sanitized[:50]  # Limit length
+        
+    def get_idea_by_id(self, idea_id: str) -> Optional[Dict[str, Any]]:
+        """Get an idea by its ID.
+        
+        Args:
+            idea_id: ID of the idea to retrieve
+            
+        Returns:
+            Idea dictionary if found, None otherwise
+        """
+        logger.info(f"Getting idea with ID: {idea_id}")
+        
+        # Look for the idea file in the ideas directory
+        idea_file = self.ideas_dir / f"{idea_id}.json"
+        
+        if not idea_file.exists():
+            # Also check the article queue directory
+            idea_file = self.article_queue_dir / f"{idea_id}.json"
+            
+            if not idea_file.exists():
+                logger.warning(f"Idea with ID {idea_id} not found")
+                return None
+        
+        try:
+            with open(idea_file, "r") as f:
+                idea = json.load(f)
+                return idea
+        except Exception as e:
+            logger.error(f"Error loading idea with ID {idea_id}: {e}")
+            return None
     
     def assemble_article(self, project_id: str) -> Optional[Dict[str, str]]:
         """Assemble the paragraphs into a complete article.

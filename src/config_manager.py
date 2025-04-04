@@ -31,6 +31,11 @@ class ConfigManager:
                 "model": os.getenv("OPENAI_MODEL", "gpt-4"),
                 "use_cache": os.getenv("OPENAI_USE_CACHE", "true").lower() == "true",
             },
+            "search": {
+                "provider": os.getenv("SEARCH_PROVIDER", "brave"),
+                "brave_api_key": os.getenv("BRAVE_API_KEY"),
+                "tavily_api_key": os.getenv("TAVILY_API_KEY"),
+            },
             "medium": {
                 "integration_token": os.getenv("MEDIUM_INTEGRATION_TOKEN"),
                 "author_id": os.getenv("MEDIUM_AUTHOR_ID"),

@@ -40,12 +40,12 @@ from src.utils import setup_logging, parse_outline
 from src.article_pipeline import ArticlePipeline
 
 
-def setup_argparse() -> argparse.Namespace:
+def setup_argparse() -> argparse.ArgumentParser:
     """
     Set up command line argument parsing with options for both simple and modular approaches.
     
     Returns:
-        Parsed command line arguments
+        ArgumentParser object with configured arguments
     """
     parser = argparse.ArgumentParser(
         description="Generate articles with OpenAI and publish to Medium",
@@ -87,6 +87,14 @@ def setup_argparse() -> argparse.Namespace:
                         help="Run the complete article generation pipeline")
     modular_parser.add_argument("--data-dir", type=str, default="data",
                         help="Directory for storing article data")
+    
+    # Web search options
+    modular_parser.add_argument("--search-provider", type=str, default="brave", choices=["brave", "tavily"],
+                        help="Web search provider to use (default: brave)")
+    modular_parser.add_argument("--brave-api-key", type=str,
+                        help="API key for Brave Search (if not set in environment)")
+    modular_parser.add_argument("--tavily-api-key", type=str,
+                        help="API key for Tavily Search (if not set in environment)")
     
     # Caching and feedback options
     modular_parser.add_argument("--use-cache", action="store_true", dest="use_cache",
@@ -148,7 +156,7 @@ def setup_argparse() -> argparse.Namespace:
     modular_parser.add_argument("--output", type=str,
                         help="Save final article to file")
     
-    return parser.parse_args()
+    return parser
 
 
 def run_simple_mode(args, config):
@@ -235,16 +243,27 @@ def run_modular_mode(args, config):
         cache_ttl_days=config["cache"].get("ttl_days", 7)
     )
     
-    # Initialize article pipeline with feedback loop and web search
-    tavily_api_key = os.environ.get("TAVILY_API_KEY")
-    if not tavily_api_key:
-        logger.warning("Tavily API key not found. Web search functionality will be limited.")
+    # Determine search provider and API key
+    search_provider = args.search_provider if hasattr(args, "search_provider") else "brave"
     
+    # Get appropriate API key based on provider
+    search_api_key = None
+    if search_provider == "brave":
+        search_api_key = args.brave_api_key if hasattr(args, "brave_api_key") and args.brave_api_key else os.environ.get("BRAVE_API_KEY")
+        if not search_api_key:
+            logger.warning("Brave API key not found. Web search functionality will be limited.")
+    else:  # tavily
+        search_api_key = args.tavily_api_key if hasattr(args, "tavily_api_key") and args.tavily_api_key else os.environ.get("TAVILY_API_KEY")
+        if not search_api_key:
+            logger.warning("Tavily API key not found. Web search functionality will be limited.")
+    
+    # Initialize article pipeline with feedback loop and web search
     pipeline = ArticlePipeline(
         openai_client, 
         data_dir=args.data_dir,
         use_feedback=use_feedback,
-        tavily_api_key=tavily_api_key
+        search_api_key=search_api_key,
+        search_provider=search_provider
     )
     
     logger.info(f"Article generator initialized with caching {'enabled' if use_cache else 'disabled'} and feedback {'enabled' if use_feedback else 'disabled'}")
@@ -495,7 +514,7 @@ def publish_to_medium(config, article, args) -> Dict[str, Any]:
     )
     
     # Get tags from arguments or config
-    tags = None
+    tags = []
     if args.tags:
         tags = [tag.strip() for tag in args.tags.split(",")]
     elif config["article"]["default_tags"]:
@@ -514,7 +533,7 @@ def publish_to_medium(config, article, args) -> Dict[str, Any]:
         content = f"*{meta_description}*\n\n{content}"
     
     # Get canonical URL if available (only in simple mode)
-    canonical_url = getattr(args, 'canonical_url', None)
+    canonical_url = getattr(args, 'canonical_url', "")
     
     # Publish the article
     result = medium_publisher.publish_article(
@@ -549,8 +568,9 @@ def main():
     # Create logs directory if it doesn't exist
     os.makedirs("logs", exist_ok=True)
     
-    # Parse command line arguments
-    args = setup_argparse()
+    # Get argument parser and parse arguments
+    parser = setup_argparse()
+    args = parser.parse_args()
     
     # Load configuration
     config_manager = ConfigManager()

@@ -199,6 +199,60 @@ class FeedbackManager:
             new_rate = ((old_rate * (count - 1)) + engagement) / count
             analytics[category_key][category_value]["engagement_rate"] = new_rate
     
+    def get_topic_feedback(self, topic: str) -> Dict[str, Any]:
+        """
+        Get feedback and performance metrics for a specific topic.
+        
+        Args:
+            topic: The topic to get feedback for
+            
+        Returns:
+            Dictionary containing performance metrics and feedback for the topic
+        """
+        try:
+            # Load analytics data
+            if not self.analytics_file.exists():
+                logger.error(f"Analytics file not found: {self.analytics_file}")
+                return {}
+            
+            with open(self.analytics_file, "r") as f:
+                analytics = json.load(f)
+            
+            # Check if topic exists in analytics
+            if topic not in analytics.get("topic_performance", {}):
+                logger.warning(f"No performance data found for topic: {topic}")
+                return {}
+            
+            # Get topic performance data
+            topic_data = analytics["topic_performance"][topic]
+            
+            # Prepare feedback - handle both direct values and calculated values
+            feedback = {
+                "performance": {
+                    # If 'articles' exists directly, use it; otherwise use 'count'
+                    "articles": topic_data.get("articles", topic_data.get("count", 0)),
+                    # If 'avg_views' exists directly, use it; otherwise calculate from total
+                    "avg_views": topic_data.get("avg_views", 0),
+                    # If 'avg_reads' exists directly, use it; otherwise calculate from total
+                    "avg_reads": topic_data.get("avg_reads", 0),
+                    # If 'avg_claps' exists directly, use it; otherwise calculate from total
+                    "avg_claps": topic_data.get("avg_claps", 0),
+                    "engagement_rate": topic_data.get("engagement_rate", 0)
+                }
+            }
+            
+            # Add best and worst performing articles if available
+            if "best_performing" in topic_data:
+                feedback["performance"]["best_performing"] = topic_data["best_performing"]
+            if "worst_performing" in topic_data:
+                feedback["performance"]["worst_performing"] = topic_data["worst_performing"]
+            
+            return feedback
+            
+        except Exception as e:
+            logger.error(f"Error getting topic feedback: {e}")
+            return {}
+    
     def get_performance_insights(self) -> Dict[str, Any]:
         """
         Get insights from performance data to guide content creation.

@@ -28,7 +28,7 @@ from src.config import (
 import os
 from src.llm_client import LLMClient
 from src.cache_manager import CacheManager
-from src.web_search import WebSearchManager
+from src.web_search import BraveSearchManager
 from src.feedback_manager import FeedbackManager
 from .trend_analyzer import TrendAnalyzer
 from .project_manager import ProjectManager
@@ -58,8 +58,14 @@ class ArticlePipeline:
         (self.data_dir / "searches").mkdir(parents=True, exist_ok=True)
         
         # Initialize components
-        self.web_search = WebSearchManager(llm_client, data_dir)
+        # Get web search configuration
+        web_search_config = get_web_search_config()
+        self.web_search = BraveSearchManager(api_key=web_search_config["brave"]["api_key"])
+        
+        # Initialize trend analyzer with BraveSearchManager
         self.trend_analyzer = TrendAnalyzer(llm_client, self.web_search)
+        
+        # Initialize other components
         self.project_manager = ProjectManager(llm_client, data_dir / "projects")
         self.content_generator = ContentGenerator(llm_client, data_dir / "projects")
         self.article_assembler = ArticleAssembler(llm_client, data_dir / "projects")

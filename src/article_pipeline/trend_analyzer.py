@@ -7,13 +7,13 @@ from typing import Dict, Any, List, Optional
 from loguru import logger
 
 from src.llm_client import LLMClient
-from src.web_search import WebSearchManager
+from src.web_search import BraveSearchManager
 
 
 class TrendAnalyzer:
     """Analyzes trends and competitor content for article generation."""
     
-    def __init__(self, openai_client: LLMClient, web_search: WebSearchManager):
+    def __init__(self, openai_client: LLMClient, web_search: BraveSearchManager):
         """Initialize the trend analyzer.
         
         Args:
@@ -93,16 +93,17 @@ class TrendAnalyzer:
         # Search for trending content using the transformed search term
         search_results = self.web_search.search(search_term)
         
-        # Extract relevant information
+        # Extract relevant information from search results
         trends = []
-        for result in search_results:
-            trends.append({
-                "title": result.get("title", ""),
-                "url": result.get("url", ""),
-                "snippet": result.get("snippet", ""),
-                "source": result.get("source", ""),
-                "date": result.get("date", "")
-            })
+        if "results" in search_results:
+            for result in search_results["results"]:
+                trends.append({
+                    "title": result.get("title", ""),
+                    "url": result.get("url", ""),
+                    "snippet": result.get("content", ""),
+                    "source": result.get("source", ""),
+                    "date": result.get("date", "")
+                })
         
         # Analyze trends using LLM
         system_prompt = (
@@ -185,18 +186,19 @@ class TrendAnalyzer:
         logger.info(f"Using transformed search term for competitor research: {search_term}")
         
         # Search for competitor content using the transformed search term
-        search_results = self.web_search.search(search_term)
+        search_results = self.web_search.get_competitor_content(search_term)
         
-        # Extract relevant information
+        # Extract relevant information from search results
         competitors = []
-        for result in search_results:
-            competitors.append({
-                "title": result.get("title", ""),
-                "url": result.get("url", ""),
-                "snippet": result.get("snippet", ""),
-                "source": result.get("source", ""),
-                "date": result.get("date", "")
-            })
+        if "results" in search_results:
+            for result in search_results["results"]:
+                competitors.append({
+                    "title": result.get("title", ""),
+                    "url": result.get("url", ""),
+                    "snippet": result.get("content", ""),
+                    "source": result.get("source", ""),
+                    "date": result.get("date", "")
+                })
         
         # Analyze competitors using LLM
         system_prompt = (

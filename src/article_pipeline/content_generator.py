@@ -74,6 +74,8 @@ class ContentGenerator:
           - Subsection 2.1: [Description]
           - Subsection 2.2: [Description]
         CONCLUSION: [Brief description of the conclusion]
+        
+        Do not use any markdown or other formatting.
         """
         
         try:
@@ -161,7 +163,6 @@ class ContentGenerator:
         Returns:
             List of generated paragraphs
         """
-        logger.info(f"Generating paragraphs for project: {project_id}")
         
         # Get project data
         project_dir = self.projects_dir / project_id

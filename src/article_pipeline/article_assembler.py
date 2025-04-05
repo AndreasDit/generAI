@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from datetime import datetime
 
 from loguru import logger
 
@@ -83,15 +84,17 @@ class ArticleAssembler:
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.7,
-                max_tokens=2000
+                max_tokens=2000,
+                use_text_generation_model=True
             )
             
-            # Save the assembled article
+            # Parse the assembled article
             article = {
                 "content": response.strip(),
                 "paragraphs": paragraphs
             }
             
+            # Save the assembled article
             article_file = project_dir / "article.json"
             with open(article_file, "w") as f:
                 json.dump(article, f, indent=2)
@@ -102,7 +105,7 @@ class ArticleAssembler:
                 metadata = json.load(f)
             
             metadata["status"] = "article_assembled"
-            metadata["updated_at"] = paragraphs[0].get("created_at", "") if paragraphs else ""
+            metadata["updated_at"] = datetime.now().isoformat()
             
             with open(metadata_file, "w") as f:
                 json.dump(metadata, f, indent=2)
@@ -131,33 +134,14 @@ class ArticleAssembler:
             logger.error(f"Project not found: {project_id}")
             return {}
         
-        # Check for article in main project directory
         article_file = project_dir / "article.json"
-        
-        # If not found, check in drafts directory
         if not article_file.exists():
-            logger.info(f"Article not found in main directory, checking drafts directory")
-            drafts_dir = project_dir / "drafts"
-            
-            if drafts_dir.exists():
-                # Try to find initial_draft.json or refined_draft.json
-                initial_draft_file = drafts_dir / "initial_draft.json"
-                refined_draft_file = drafts_dir / "refined_draft.json"
-                
-                if refined_draft_file.exists():
-                    article_file = refined_draft_file
-                    logger.info(f"Using existing refined draft for project: {project_id}")
-                elif initial_draft_file.exists():
-                    article_file = initial_draft_file
-                    logger.info(f"Using initial draft for project: {project_id}")
-        
-        if not article_file.exists():
-            logger.error(f"No article or draft found for project: {project_id}")
+            logger.error(f"Project article not found: {project_id}")
             return {}
         
         with open(article_file) as f:
             article = json.load(f)
-            
+        
         # Ensure we have the expected content structure
         if "content" not in article and "introduction" in article:
             # This is likely a draft format with introduction, content, conclusion
@@ -202,64 +186,16 @@ class ArticleAssembler:
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.7,
-                max_tokens=2000
+                max_tokens=2000,
+                use_text_generation_model=True
             )
             
-            # Save the refined article with title
-            # Extract title from original article or metadata
-            title = None
+            # Update the article with refined content
+            article["content"] = response.strip()
             
-            # First try to get title from the article itself
-            if "title" in article:
-                title = article["title"]
-            
-            # If not found in article, try to get from metadata
-            if not title:
-                metadata_file = project_dir / "metadata.json"
-                if metadata_file.exists():
-                    with open(metadata_file) as f:
-                        metadata = json.load(f)
-                        if "title" in metadata:
-                            title = metadata["title"]
-            
-            # If still not found, check if it's in the initial draft
-            if not title:
-                initial_draft_file = drafts_dir / "initial_draft.json"
-                if initial_draft_file.exists():
-                    try:
-                        with open(initial_draft_file) as f:
-                            initial_draft = json.load(f)
-                            if "title" in initial_draft:
-                                title = initial_draft["title"]
-                    except Exception as e:
-                        logger.error(f"Error reading initial draft: {e}")
-            
-            # Create refined article with title if found
-            refined_article = {
-                "content": response.strip(),
-                "original_content": article["content"],
-                "paragraphs": article.get("paragraphs", [])
-            }
-            
-            # Add title to refined article if found
-            if title:
-                refined_article["title"] = title
-            
-            # Ensure drafts directory exists
-            drafts_dir = project_dir / "drafts"
-            drafts_dir.mkdir(exist_ok=True)
-            
-            # Save to drafts directory for consistency
-            refined_file = drafts_dir / "refined_draft.json"
-            with open(refined_file, "w") as f:
-                json.dump(refined_article, f, indent=2)
-                
-            # Also save to project directory for SEO optimization step
-            refined_article_file = project_dir / "refined_article.json"
-            with open(refined_article_file, "w") as f:
-                json.dump(refined_article, f, indent=2)
-                
-            logger.info(f"Saved refined article to both drafts directory and project directory for project: {project_id}")
+            # Save the refined article
+            with open(article_file, "w") as f:
+                json.dump(article, f, indent=2)
             
             # Update project metadata
             metadata_file = project_dir / "metadata.json"
@@ -267,13 +203,13 @@ class ArticleAssembler:
                 metadata = json.load(f)
             
             metadata["status"] = "article_refined"
-            metadata["updated_at"] = article.get("created_at", "")
+            metadata["updated_at"] = datetime.now().isoformat()
             
             with open(metadata_file, "w") as f:
                 json.dump(metadata, f, indent=2)
             
             logger.info(f"Refined article for project: {project_id}")
-            return refined_article
+            return article
             
         except Exception as e:
             logger.error(f"Error refining article: {e}")

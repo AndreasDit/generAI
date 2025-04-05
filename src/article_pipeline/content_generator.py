@@ -83,7 +83,8 @@ class ContentGenerator:
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.7,
-                max_tokens=1000
+                max_tokens=1000,
+                use_text_generation_model=True
             )
             
             # Parse the outline
@@ -202,7 +203,8 @@ class ContentGenerator:
                         {"role": "user", "content": user_prompt}
                     ],
                     temperature=0.7,
-                    max_tokens=500
+                    max_tokens=500,
+                    use_text_generation_model=True
                 )
                 
                 paragraphs.append({
@@ -237,7 +239,8 @@ class ContentGenerator:
                                 {"role": "user", "content": user_prompt}
                             ],
                             temperature=0.7,
-                            max_tokens=500
+                            max_tokens=500,
+                            use_text_generation_model=True
                         )
                         
                         paragraphs.append({
@@ -267,7 +270,8 @@ class ContentGenerator:
                         {"role": "user", "content": user_prompt}
                     ],
                     temperature=0.7,
-                    max_tokens=500
+                    max_tokens=500,
+                    use_text_generation_model=True
                 )
                 
                 paragraphs.append({

@@ -31,6 +31,7 @@ LLM_CONFIG = {
     "openai": {
         "api_key": os.getenv("OPENAI_API_KEY"),
         "model": os.getenv("OPENAI_MODEL"),
+        "text_generation_model": os.getenv("OPENAI_MODEL_TEXT_GENERATION"),
         "max_tokens": 4096,
         "temperature": 0.7
     }

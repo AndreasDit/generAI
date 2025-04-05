@@ -39,12 +39,12 @@ class SEOOptimizer:
             logger.error(f"Project not found: {project_id} in {project_dir}")
             return {}
         
-        refined_file = project_dir / "refined_article.json"
-        if not refined_file.exists():
-            logger.error(f"Project refined article not found: {project_id} under {refined_file}")
+        article_file = project_dir / "article.json"
+        if not article_file.exists():
+            logger.error(f"Project article not found: {project_id} under {article_file}")
             return {}
         
-        with open(refined_file) as f:
+        with open(article_file) as f:
             article = json.load(f)
         
         # Optimize article using LLM
@@ -75,7 +75,8 @@ class SEOOptimizer:
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.7,
-                max_tokens=2000
+                max_tokens=2000,
+                use_text_generation_model=True
             )
             
             # Parse SEO metadata and content

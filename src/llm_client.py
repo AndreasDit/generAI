@@ -47,32 +47,41 @@ class OpenAIClient(LLMClient):
         config = LLM_CONFIG["openai"]
         self.client = openai.OpenAI(api_key=config["api_key"])
         self.model = config["model"]
+        self.text_generation_model = config.get("text_generation_model", self.model)
         self.max_tokens = config["max_tokens"]
         self.temperature = config["temperature"]
     
-    def chat_completion(self, messages: List[Dict[str, str]], temperature: Optional[float] = None, max_tokens: Optional[int] = None) -> str:
-        """Generate a chat completion using OpenAI.
+    def chat_completion(self, messages: List[Dict[str, str]], temperature: Optional[float] = None, max_tokens: Optional[int] = None, use_text_generation_model: bool = False) -> str:
+        """Generate a chat completion.
         
         Args:
             messages: List of message dictionaries with 'role' and 'content' keys
-            temperature: Sampling temperature (0.0 to 1.0)
-            max_tokens: Maximum number of tokens to generate
+            temperature: Sampling temperature (0.0 to 1.0), defaults to instance value
+            max_tokens: Maximum number of tokens to generate, defaults to instance value
+            use_text_generation_model: Whether to use the text generation model instead of the default model
             
         Returns:
             Generated text response
         """
+        # Use instance values if not specified
+        temperature = temperature if temperature is not None else self.temperature
+        max_tokens = max_tokens if max_tokens is not None else self.max_tokens
+        
+        # Choose the appropriate model
+        model = self.text_generation_model if use_text_generation_model else self.model
+        
         try:
             response = self.client.chat.completions.create(
-                model=self.model,
+                model=model,
                 messages=messages,
-                temperature=temperature or self.temperature,
-                max_tokens=max_tokens or self.max_tokens
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
             
-            # Log token usage
+            # Log token usage if available
             if hasattr(response, 'usage'):
                 self.log_token_usage(
-                    model=self.model,
+                    model=model,
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     total_tokens=response.usage.total_tokens
@@ -81,8 +90,8 @@ class OpenAIClient(LLMClient):
             return response.choices[0].message.content
             
         except Exception as e:
-            logger.error(f"Error in OpenAI chat completion: {e}")
-            raise
+            logger.error(f"Error in OpenAI API call: {e}")
+            return ""
 
 
 class ClaudeClient(LLMClient):

@@ -143,6 +143,7 @@ class ArticlePipeline:
         - target_audience: Target audience
         - key_points: List of key points
         - value_proposition: Unique value proposition
+        - id: Universally unique identifier for the idea
         """
         
         try:
@@ -192,7 +193,8 @@ class ArticlePipeline:
             ideas_dir = self.data_dir / "ideas"
             for i, idea in enumerate(ideas):
                 timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-                idea_file = ideas_dir / f"idea_{timestamp}_{i + 1}.json"
+                idea_id = f"idea_{timestamp}_{i + 1}"
+                idea_file = ideas_dir / f"{idea_id}.json"
                 with open(idea_file, "w") as f:
                     json.dump(idea, f, indent=2)
             
@@ -364,6 +366,7 @@ class ArticlePipeline:
                 
                 # Move the selected idea file to the project folder
                 project_dir = self.data_dir / "projects" / project_id
+                logger.info(f"Project directory: {project_dir}")
                 project_dir.mkdir(parents=True, exist_ok=True)
                 
                 # Copy the idea to the project folder
@@ -398,7 +401,7 @@ class ArticlePipeline:
         
         try:
             outline = self.content_generator.generate_outline(project_id)
-            return bool(outline)
+            return outline
             
         except Exception as e:
             logger.error(f"Error generating outline: {e}")

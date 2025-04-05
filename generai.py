@@ -268,7 +268,7 @@ def run_modular_mode(args, config):
         research_topic = args.research_topic or config.get("research_topic", default_topic)
         logger.info(f"{config.get("research", {}).get("num_ideas", 5)} {config.get("research", {})} {args.num_ideas}")
         num_ideas = args.num_ideas or config.get("research", {}).get("num_ideas", 5)
-        ideas = pipeline.generate_ideas(research_topic, num_ideas)
+        ideas = pipeline.generate_ideas(research_topic=research_topic, num_ideas=3)
         print(f"Generated {len(ideas)} ideas for '{research_topic}':")
         for i, idea in enumerate(ideas, 1):
             print(f"{i}. {idea.get('title', 'No title')}")

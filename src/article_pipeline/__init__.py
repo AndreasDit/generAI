@@ -191,7 +191,8 @@ class ArticlePipeline:
             # Save ideas
             ideas_dir = self.data_dir / "ideas"
             for i, idea in enumerate(ideas):
-                idea_file = ideas_dir / f"idea_{i + 1}.json"
+                timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+                idea_file = ideas_dir / f"idea_{timestamp}_{i + 1}.json"
                 with open(idea_file, "w") as f:
                     json.dump(idea, f, indent=2)
             
@@ -210,15 +211,25 @@ class ArticlePipeline:
         """
         logger.info("Evaluating article ideas")
         
+        # Create directories for organizing ideas
+        ideas_dir = self.data_dir / "ideas"
+        ideas_chosen_dir = self.data_dir / "ideas_chosen"
+        ideas_sorted_out_dir = self.data_dir / "ideas_sorted_out"
+        
+        # Create directories if they don't exist
+        ideas_chosen_dir.mkdir(parents=True, exist_ok=True)
+        ideas_sorted_out_dir.mkdir(parents=True, exist_ok=True)
+        
         # Load generated ideas
         ideas = []
-        ideas_dir = self.data_dir / "ideas"
+        idea_files = []
         
         for idea_file in ideas_dir.glob("idea_*.json"):
             try:
                 with open(idea_file) as f:
                     idea = json.load(f)
                     ideas.append(idea)
+                    idea_files.append(idea_file)
             except Exception as e:
                 logger.error(f"Error loading idea file {idea_file}: {e}")
         
@@ -246,6 +257,7 @@ class ArticlePipeline:
         - selected_idea_index: Index of the selected idea (0-based)
         - reasoning: Explanation of the selection
         - improvements: Suggested improvements
+        - worst_idea_indices: Array of indices of the 3 worst ideas (0-based)
         
         Return ONLY the JSON object, nothing else. No identifer that this is a JSON object.
         """
@@ -266,6 +278,7 @@ class ArticlePipeline:
                 evaluation = json.loads(response)
                 logger.info(f"Selected idea index: {evaluation}")
                 selected_index = evaluation.get("selected_idea_index")
+                worst_indices = evaluation.get("worst_idea_indices", [])
                 logger.info(f"Selected idea index: {selected_index}, {evaluation}")
                 
                 if selected_index is not None and 0 <= selected_index < len(ideas):
@@ -275,14 +288,46 @@ class ArticlePipeline:
                         "improvements": evaluation.get("improvements", "")
                     }
                     
-                    # Save selected idea
-                    selected_file = self.data_dir / "article_queue" / "selected_idea.json"
+                    # Save selected idea to article_queue
+                    selected_file = self.data_dir / "article_queue" / f"selected_idea_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
                     selected_file.parent.mkdir(parents=True, exist_ok=True)
                     
                     with open(selected_file, "w") as f:
                         json.dump(selected_idea, f, indent=2)
                     
+                    # Move selected idea to ideas_chosen directory
+                    chosen_file = ideas_chosen_dir / f"chosen_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
+                    with open(chosen_file, "w") as f:
+                        json.dump(selected_idea, f, indent=2)
+                    
+                    # Move the 3 worst ideas to ideas_sorted_out directory
+                    for idx in worst_indices:
+                        if 0 <= idx < len(ideas) and idx != selected_index:
+                            worst_idea = ideas[idx]
+                            worst_file = ideas_sorted_out_dir / f"sorted_out_{datetime.now().strftime('%Y%m%d%H%M%S')}_{idx}.json"
+                            with open(worst_file, "w") as f:
+                                json.dump(worst_idea, f, indent=2)
+                            
+                            # Delete the original file from ideas directory
+                            if idx < len(idea_files):
+                                try:
+                                    idea_files[idx].unlink()
+                                    logger.info(f"Deleted original file: {idea_files[idx]}")
+                                except Exception as e:
+                                    logger.error(f"Error deleting original file {idea_files[idx]}: {e}")
+                    
+                    # Delete the selected idea file from ideas directory
+                    if selected_index < len(idea_files):
+                        try:
+                            idea_files[selected_index].unlink()
+                            logger.info(f"Deleted selected idea file: {idea_files[selected_index]}")
+                        except Exception as e:
+                            logger.error(f"Error deleting selected idea file {idea_files[selected_index]}: {e}")
+                    
                     logger.info(f"Selected idea: {selected_idea['title']}")
+                    logger.info(f"Moved selected idea to {ideas_chosen_dir}")
+                    logger.info(f"Moved {len(worst_indices)} worst ideas to {ideas_sorted_out_dir}")
+                    
                     return selected_idea
                 
             except json.JSONDecodeError:

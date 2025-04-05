@@ -7,127 +7,141 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 from loguru import logger
 
-from src.openai_client import OpenAIClient
+from src.llm_client import LLMClient
 from .utils import sanitize_filename
 
 class ProjectManager:
     """Handles project creation and management."""
     
-    def __init__(self, openai_client: OpenAIClient, projects_dir: Path):
+    def __init__(self, openai_client: LLMClient, projects_dir: Path):
         """Initialize the project manager.
         
         Args:
-            openai_client: OpenAI client for API interactions
+            openai_client: LLM client for API interactions
             projects_dir: Directory to store project data
         """
-        self.openai_client = openai_client
+        self.llm_client = openai_client
         self.projects_dir = projects_dir
+        self.projects_dir.mkdir(parents=True, exist_ok=True)
     
-    def create_project(self, idea: Dict[str, Any]) -> Optional[str]:
-        """Create a new project from a selected idea.
+    def create_project(self, idea: Dict[str, Any]) -> str:
+        """Create a new project from an idea.
         
         Args:
-            idea: Selected idea dictionary
+            idea: Dictionary containing idea data
             
         Returns:
-            Project ID or None if creation failed
+            Project ID
         """
-        try:
-            # Generate project ID
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            project_id = f"project_{timestamp}"
-            
-            # Create project directory
-            project_dir = self.projects_dir / project_id
-            project_dir.mkdir(exist_ok=True)
-            
-            # Create project metadata
-            project_data = {
-                "id": project_id,
-                "idea": idea,
-                "created_at": timestamp,
-                "status": "created",
-                "outline": None,
-                "paragraphs": [],
-                "final_article": None
-            }
-            
-            # Save project metadata
-            metadata_file = project_dir / "metadata.json"
-            with open(metadata_file, "w") as f:
-                json.dump(project_data, f, indent=2)
-            
-            # Create directories for project assets
-            (project_dir / "outline").mkdir(exist_ok=True)
-            (project_dir / "paragraphs").mkdir(exist_ok=True)
-            (project_dir / "drafts").mkdir(exist_ok=True)
-            
-            logger.info(f"Created project {project_id} from idea {idea.get('id', 'unknown')}")
-            return project_id
-            
-        except Exception as e:
-            logger.error(f"Error creating project: {e}")
-            return None
+        logger.info("Creating new project from idea")
+        
+        # Generate project ID
+        project_id = f"project_{idea.get('id', '')}"
+        
+        # Create project directory
+        project_dir = self.projects_dir / project_id
+        project_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save idea data
+        idea_file = project_dir / "idea.json"
+        with open(idea_file, "w") as f:
+            json.dump(idea, f, indent=2)
+        
+        # Initialize project metadata
+        metadata = {
+            "id": project_id,
+            "status": "created",
+            "idea_id": idea.get("id", ""),
+            "created_at": idea.get("created_at", ""),
+            "updated_at": idea.get("created_at", "")
+        }
+        
+        # Save metadata
+        metadata_file = project_dir / "metadata.json"
+        with open(metadata_file, "w") as f:
+            json.dump(metadata, f, indent=2)
+        
+        logger.info(f"Created project: {project_id}")
+        return project_id
     
-    def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve project data by ID.
+    def get_project(self, project_id: str) -> Dict[str, Any]:
+        """Get project data.
         
         Args:
-            project_id: ID of the project to retrieve
+            project_id: ID of the project to get
             
         Returns:
-            Project data dictionary or None if not found
+            Dictionary containing project data
         """
+        logger.info(f"Getting project: {project_id}")
+        
         project_dir = self.projects_dir / project_id
         if not project_dir.exists():
-            return None
+            logger.error(f"Project not found: {project_id}")
+            return {}
         
+        # Load metadata
         metadata_file = project_dir / "metadata.json"
         if not metadata_file.exists():
-            return None
+            logger.error(f"Project metadata not found: {project_id}")
+            return {}
         
-        try:
-            with open(metadata_file) as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Error reading project metadata: {e}")
-            return None
+        with open(metadata_file) as f:
+            metadata = json.load(f)
+        
+        # Load idea data
+        idea_file = project_dir / "idea.json"
+        if not idea_file.exists():
+            logger.error(f"Project idea not found: {project_id}")
+            return metadata
+        
+        with open(idea_file) as f:
+            idea = json.load(f)
+        
+        # Combine data
+        project_data = {
+            **metadata,
+            "idea": idea
+        }
+        
+        return project_data
     
     def update_project(self, project_id: str, updates: Dict[str, Any]) -> bool:
-        """Update project metadata.
+        """Update project data.
         
         Args:
             project_id: ID of the project to update
-            updates: Dictionary of updates to apply
+            updates: Dictionary containing updates
             
         Returns:
-            True if update successful, False otherwise
+            True if successful, False otherwise
         """
+        logger.info(f"Updating project: {project_id}")
+        
         project_dir = self.projects_dir / project_id
         if not project_dir.exists():
+            logger.error(f"Project not found: {project_id}")
             return False
         
+        # Load current metadata
         metadata_file = project_dir / "metadata.json"
         if not metadata_file.exists():
+            logger.error(f"Project metadata not found: {project_id}")
             return False
         
-        try:
-            # Read current metadata
-            with open(metadata_file) as f:
-                project_data = json.load(f)
-            
-            # Apply updates
-            project_data.update(updates)
-            
-            # Save updated metadata
-            with open(metadata_file, "w") as f:
-                json.dump(project_data, f, indent=2)
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error updating project: {e}")
-            return False
+        with open(metadata_file) as f:
+            metadata = json.load(f)
+        
+        # Update metadata
+        metadata.update(updates)
+        metadata["updated_at"] = updates.get("updated_at", metadata["updated_at"])
+        
+        # Save updated metadata
+        with open(metadata_file, "w") as f:
+            json.dump(metadata, f, indent=2)
+        
+        logger.info(f"Updated project: {project_id}")
+        return True
     
     def delete_project(self, project_id: str) -> bool:
         """Delete a project and all its data.

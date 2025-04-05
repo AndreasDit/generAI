@@ -111,7 +111,7 @@ def mock_environment():
     
     # Set test environment variables
     os.environ["OPENAI_API_KEY"] = "test_openai_key"
-    os.environ["OPENAI_MODEL"] = "gpt-4"
+    os.environ["OPENAI_MODEL"] = "gpt-4o"
     os.environ["MEDIUM_INTEGRATION_TOKEN"] = "test_medium_token"
     os.environ["MEDIUM_AUTHOR_ID"] = "test_author_id"
     os.environ["TAVILY_API_KEY"] = "test_tavily_key"

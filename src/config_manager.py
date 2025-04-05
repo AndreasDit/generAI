@@ -28,7 +28,7 @@ class ConfigManager:
         config = {
             "openai": {
                 "api_key": os.getenv("OPENAI_API_KEY"),
-                "model": os.getenv("OPENAI_MODEL", "gpt-4"),
+                "model": os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
                 "use_cache": os.getenv("OPENAI_USE_CACHE", "true").lower() == "true",
             },
             "search": {

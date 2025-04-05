@@ -10,12 +10,15 @@ to enhance the article generation process with real-time data.
 import os
 import requests
 import time
+import json
+from pathlib import Path
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
 from abc import ABC, abstractmethod
 
 from loguru import logger
 from tavily import TavilyClient
+from src.llm_client import LLMClient
 
 
 class SearchProvider(ABC):
@@ -430,81 +433,82 @@ class TavilySearchManager(SearchProvider):
 
 
 class WebSearchManager:
-    """Factory class that creates and manages search providers."""
+    """Manages web searches for article research."""
     
-    def __init__(self, api_key: Optional[str] = None, provider: str = "brave"):
-        """
-        Initialize the web search manager with the specified provider.
+    def __init__(self, openai_client: LLMClient, data_dir: Path):
+        """Initialize the web search manager.
         
         Args:
-            api_key: API key for the search provider (if None, will try to get from environment)
-            provider: Search provider to use ("brave" or "tavily")
+            openai_client: LLM client for API interactions
+            data_dir: Directory to store search data
         """
-        self.provider_name = provider.lower()
-        
-        # Create the appropriate search provider
-        if self.provider_name == "tavily":
-            self.provider = TavilySearchManager(api_key=api_key)
-        else:  # Default to Brave
-            self.provider = BraveSearchManager(api_key=api_key)
-        
-        if self.provider.is_available():
-            logger.info(f"Web search manager initialized with {self.provider_name.capitalize()} API")
-        else:
-            logger.warning(f"Web search unavailable: {self.provider_name.capitalize()} client not initialized")
+        self.llm_client = openai_client
+        self.data_dir = data_dir
+        self.search_dir = data_dir / "searches"
+        self.search_dir.mkdir(parents=True, exist_ok=True)
     
-    def is_available(self) -> bool:
-        """Check if web search functionality is available.
-        
-        Returns:
-            True if the search provider is available, False otherwise
-        """
-        return self.provider.is_available()
-    
-    def search(self, query: str, search_depth: str = "basic", max_results: int = 5) -> Dict[str, Any]:
-        """Search the web for information related to the query.
+    def search(self, query: str) -> List[Dict[str, Any]]:
+        """Search the web for a query.
         
         Args:
-            query: Search query string
-            search_depth: Depth of search ("basic" or "comprehensive")
-            max_results: Maximum number of results to return
+            query: Search query
             
         Returns:
-            Dictionary containing search results and metadata
+            List of search results
         """
-        return self.provider.search(query, search_depth, max_results)
-    
-    def search_news(self, topic: str, max_results: int = 5) -> Dict[str, Any]:
-        """Search for recent news articles related to the topic.
+        logger.info(f"Searching for: {query}")
         
-        Args:
-            topic: Topic to search for news about
-            max_results: Maximum number of results to return
-            
-        Returns:
-            Dictionary containing news search results and metadata
-        """
-        return self.provider.search_news(topic, max_results)
-    
-    def get_topic_insights(self, topic: str) -> Dict[str, Any]:
-        """Get comprehensive insights about a topic from the web.
+        # Simulate web search results
+        system_prompt = (
+            "You are an expert web researcher who provides search results. "
+            "Your task is to simulate realistic search results for a query."
+        )
         
-        Args:
-            topic: Topic to research
-            
-        Returns:
-            Dictionary containing topic insights from web search
-        """
-        return self.provider.get_topic_insights(topic)
-    
-    def get_competitor_content(self, topic: str, max_results: int = 5) -> Dict[str, Any]:
-        """Search for competitor content related to the topic.
+        user_prompt = f"""Generate simulated search results for the query: {query}
+
+        Please provide 5-10 results with:
+        1. Title
+        2. URL
+        3. Snippet
+        4. Source
+        5. Date
         
-        Args:
-            topic: Topic to research competitor content for
-            max_results: Maximum number of results to return
-            
-        Returns:
-            Dictionary containing competitor content search results
+        Format each result as a JSON object.
         """
-        return self.provider.get_competitor_content(topic, max_results)
+        
+        try:
+            response = self.llm_client.chat_completion(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1000
+            )
+            
+            # Parse search results
+            results = []
+            current_result = {}
+            
+            for line in response.split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                
+                try:
+                    result = json.loads(line)
+                    results.append(result)
+                except json.JSONDecodeError:
+                    continue
+            
+            # Save search results
+            search_file = self.search_dir / f"{query.replace(' ', '_')}.json"
+            with open(search_file, "w") as f:
+                json.dump(results, f, indent=2)
+            
+            logger.info(f"Found {len(results)} results for: {query}")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error searching: {e}")
+            return []

@@ -28,11 +28,12 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+import json
 
 from loguru import logger
 
 from src.config_manager import ConfigManager
-from src.openai_client import OpenAIClient
+from src.llm_client import create_llm_client
 from src.medium_publisher import MediumPublisher
 from src.utils import setup_logging, parse_outline
 
@@ -185,7 +186,7 @@ def run_simple_mode(args, config):
         return
     
     # Initialize OpenAI client
-    openai_client = OpenAIClient(
+    openai_client = LLMClient(
         api_key=config["openai"]["api_key"],
         model=config["openai"]["model"]
     )
@@ -230,25 +231,20 @@ def run_simple_mode(args, config):
         publish_to_medium(config, article, args)
 
 
-def run_modular_mode(args: argparse.Namespace, config: Dict[str, Any]) -> None:
-    """Run the article pipeline in modular mode.
+def run_modular_mode(args, config):
+    """Run the article generation pipeline in modular mode."""
+    # Check if OpenAI API key is available
+    api_key = args.openai_api_key or config["openai"]["api_key"]
+    if not api_key:
+        logger.error("OpenAI API key not found. Please set it as OPENAI_API_KEY environment variable or use --openai-api-key.")
+        return
     
-    Args:
-        args: Command line arguments
-        config: Configuration dictionary
-    """
-    # Initialize OpenAI client
-    openai_client = OpenAIClient(
-        api_key=args.openai_api_key or os.getenv("OPENAI_API_KEY"),
-        model=args.model or config.get("model", "gpt-4"),
-        temperature=args.temperature or config.get("temperature", 0.7),
-        max_tokens=args.max_tokens or config.get("max_tokens", 2000),
-        cache_dir=args.cache_dir or config.get("cache_dir", "cache")
-    )
+    # Initialize LLM client
+    llm_client = create_llm_client()
     
-    # Initialize article pipeline
+    # Initialize the pipeline
     pipeline = ArticlePipeline(
-        openai_client=openai_client,
+        llm_client=llm_client,
         data_dir=Path(args.data_dir or config.get("data_dir", "data"))
     )
     
@@ -259,112 +255,132 @@ def run_modular_mode(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     if args.analyze_trends:
         research_topic = args.research_topic or config.get("research_topic", default_topic)
         trend_analysis = pipeline.analyze_trends(research_topic)
-        logger.info("Trend analysis completed")
+        print(f"Trend analysis for '{research_topic}':")
+        print(json.dumps(trend_analysis, indent=2))
     
     if args.research_competitors:
         research_topic = args.research_topic or config.get("research_topic", default_topic)
         competitor_research = pipeline.research_competitors(research_topic)
-        logger.info("Competitor research completed")
+        print(f"Competitor research for '{research_topic}':")
+        print(json.dumps(competitor_research, indent=2))
     
     if args.generate_ideas:
         research_topic = args.research_topic or config.get("research_topic", default_topic)
+        logger.info(f"{config.get("research", {}).get("num_ideas", 5)} {config.get("research", {})} {args.num_ideas}")
         num_ideas = args.num_ideas or config.get("research", {}).get("num_ideas", 5)
         ideas = pipeline.generate_ideas(research_topic, num_ideas)
-        logger.info(f"Generated {len(ideas)} ideas")
+        print(f"Generated {len(ideas)} ideas for '{research_topic}':")
+        for i, idea in enumerate(ideas, 1):
+            print(f"{i}. {idea.get('title', 'No title')}")
+            print(f"   {idea.get('description', 'No description')}")
     
     if args.evaluate_ideas:
         max_ideas = args.max_ideas or config.get("max_ideas", 10)
-        selected_idea = pipeline.evaluate_ideas(max_ideas)
+        selected_idea = pipeline.evaluate_ideas(max_ideas=max_ideas)
         if selected_idea:
-            logger.info(f"Selected idea: {selected_idea}")
+            print(f"Selected idea: {selected_idea}")
         else:
-            logger.warning("No suitable idea selected")
+            print("No suitable idea selected.")
     
     if args.create_project:
         project_id = pipeline.create_project()
         if project_id:
-            logger.info(f"Created project: {project_id}")
+            print(f"Created project with ID: {project_id}")
         else:
-            logger.error("Failed to create project")
+            print("Failed to create project.")
     
     if args.generate_outline:
-        project_id = args.project_id or config.get("project_id")
-        if not project_id:
-            logger.error("Project ID required for outline generation")
+        if not args.project_id:
+            print("Error: --project-id is required for generating an outline.")
             return
-        outline = pipeline.generate_outline(project_id)
+        outline = pipeline.generate_outline(args.project_id)
         if outline:
-            logger.info("Outline generated successfully")
+            print(f"Generated outline for project {args.project_id}:")
+            for i, section in enumerate(outline, 1):
+                print(f"{i}. {section}")
         else:
-            logger.error("Failed to generate outline")
+            print(f"Failed to generate outline for project {args.project_id}.")
     
     if args.generate_paragraphs:
-        project_id = args.project_id or config.get("project_id")
-        if not project_id:
-            logger.error("Project ID required for paragraph generation")
+        if not args.project_id:
+            print("Error: --project-id is required for generating paragraphs.")
             return
-        success = pipeline.generate_paragraphs(project_id)
+        success = pipeline.generate_paragraphs(args.project_id)
         if success:
-            logger.info("Paragraphs generated successfully")
+            print(f"Generated paragraphs for project {args.project_id}.")
         else:
-            logger.error("Failed to generate paragraphs")
+            print(f"Failed to generate paragraphs for project {args.project_id}.")
     
     if args.assemble_article:
-        project_id = args.project_id or config.get("project_id")
-        if not project_id:
-            logger.error("Project ID required for article assembly")
+        if not args.project_id:
+            print("Error: --project-id is required for assembling the article.")
             return
-        article = pipeline.assemble_article(project_id)
+        article = pipeline.assemble_article(args.project_id)
         if article:
-            logger.info("Article assembled successfully")
+            print(f"Assembled article for project {args.project_id}:")
+            print(f"Title: {article.get('title', 'No title')}")
+            print(f"Content: {article.get('content', 'No content')[:200]}...")
         else:
-            logger.error("Failed to assemble article")
+            print(f"Failed to assemble article for project {args.project_id}.")
     
     if args.refine_article:
-        project_id = args.project_id or config.get("project_id")
-        if not project_id:
-            logger.error("Project ID required for article refinement")
+        if not args.project_id:
+            print("Error: --project-id is required for refining the article.")
             return
-        refined_article = pipeline.refine_article(project_id)
+        refined_article = pipeline.refine_article(args.project_id)
         if refined_article:
-            logger.info("Article refined successfully")
+            print(f"Refined article for project {args.project_id}:")
+            print(f"Title: {refined_article.get('title', 'No title')}")
+            print(f"Content: {refined_article.get('content', 'No content')[:200]}...")
         else:
-            logger.error("Failed to refine article")
+            print(f"Failed to refine article for project {args.project_id}.")
     
     if args.optimize_seo:
-        project_id = args.project_id or config.get("project_id")
-        if not project_id:
-            logger.error("Project ID required for SEO optimization")
+        if not args.project_id:
+            print("Error: --project-id is required for optimizing SEO.")
             return
-        seo_article = pipeline.optimize_seo(project_id)
-        if seo_article:
-            logger.info("SEO optimization completed")
+        seo_article = pipeline.optimize_seo(args.project_id)
+        if seo_article and isinstance(seo_article, dict):
+            print(f"Optimized article for SEO (project {args.project_id}):")
+            print(f"Title: {seo_article.get('title', 'No title')}")
+            # Extract metadata for display
+            metadata = seo_article.get('metadata', '')
+            # Try to extract meta description and keywords from metadata if they exist
+            print(f"Metadata: {metadata[:100]}..." if metadata else "No metadata")
         else:
-            logger.error("Failed to optimize SEO")
+            print(f"Failed to optimize article for SEO (project {args.project_id}).")
     
     if args.publish_to_medium:
-        project_id = args.project_id or config.get("project_id")
-        if not project_id:
-            logger.error("Project ID required for publishing")
+        if not args.project_id:
+            print("Error: --project-id is required for publishing to Medium.")
             return
-        tags = args.tags.split(",") if args.tags else None
+        tags = args.tags.split(',') if args.tags else None
         status = args.status or "draft"
-        result = pipeline.publish_to_medium(project_id, tags, status)
-        if result:
-            logger.info("Article published successfully")
+        result = pipeline.publish_to_medium(args.project_id, tags, status)
+        if result.get('success'):
+            print(f"Published article to Medium: {result.get('url')}")
         else:
-            logger.error("Failed to publish article")
+            print(f"Failed to publish article to Medium: {result.get('error')}")
     
     if args.record_metrics:
-        project_id = args.project_id or config.get("project_id")
-        if not project_id:
-            logger.error("Project ID required for metrics recording")
+        if not args.project_id:
+            print("Error: --project-id is required for recording metrics.")
             return
-        success = pipeline.record_metrics(project_id)
+        success = pipeline.record_metrics(args.project_id)
         if success:
-            logger.info("Metrics recorded successfully")
+            print(f"Recorded metrics for project {args.project_id}.")
         else:
-            logger.error("Failed to record metrics")
+            print(f"Failed to record metrics for project {args.project_id}.")
+    
+    if args.run_full_pipeline:
+        research_topic = args.research_topic or config.get("research_topic", default_topic)
+        num_ideas = args.num_ideas or config.get("num_ideas", 5)
+        max_ideas = args.max_ideas or config.get("max_ideas", 10)
+        result = pipeline.run_full_pipeline(research_topic, num_ideas, max_ideas)
+        if result:
+            print(f"Pipeline completed successfully. Article saved to: {result.get('file_path')}")
+        else:
+            print("Pipeline failed.")
 
 
 def publish_to_medium(config, article, args) -> Dict[str, Any]:

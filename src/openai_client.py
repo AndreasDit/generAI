@@ -135,6 +135,10 @@ class OpenAIClient:
                 max_tokens=max_tokens,
             )
             
+            # Log token usage
+            if hasattr(response, 'usage'):
+                logger.info(f"Token usage - Model: {self.model}, Prompt tokens: {response.usage.prompt_tokens}, Completion tokens: {response.usage.completion_tokens}, Total tokens: {response.usage.total_tokens}")
+            
             content = response.choices[0].message.content
             
             # Extract title and content
@@ -207,6 +211,10 @@ class OpenAIClient:
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
+            
+            # Log token usage
+            if hasattr(response, 'usage'):
+                logger.info(f"Token usage - Model: {self.model}, Prompt tokens: {response.usage.prompt_tokens}, Completion tokens: {response.usage.completion_tokens}, Total tokens: {response.usage.total_tokens}")
             
             content = response.choices[0].message.content
             
@@ -318,6 +326,10 @@ class OpenAIClient:
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
+            
+            # Log token usage
+            if hasattr(response, 'usage'):
+                logger.info(f"Token usage - Model: {self.model}, Prompt tokens: {response.usage.prompt_tokens}, Completion tokens: {response.usage.completion_tokens}, Total tokens: {response.usage.total_tokens}")
             
             content = response.choices[0].message.content
             
@@ -456,6 +468,10 @@ class OpenAIClient:
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
+            
+            # Log token usage
+            if hasattr(response, 'usage'):
+                logger.info(f"Token usage - Model: {self.model}, Prompt tokens: {response.usage.prompt_tokens}, Completion tokens: {response.usage.completion_tokens}, Total tokens: {response.usage.total_tokens}")
             
             content = response.choices[0].message.content
             

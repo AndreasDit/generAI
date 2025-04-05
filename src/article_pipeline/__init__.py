@@ -13,16 +13,24 @@ It breaks down the article creation process into sequential steps:
 """
 
 import os
+import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+from datetime import datetime
 
 from loguru import logger
 
-from src.openai_client import OpenAIClient
+from src.config import (
+    DATA_DIR, CACHE_DIR, PROJECTS_DIR, IDEAS_DIR, ARTICLE_QUEUE_DIR,
+    get_llm_config, get_cache_config, get_web_search_config,
+    get_project_config, get_feedback_config
+)
+import os
+from src.llm_client import LLMClient
+from src.cache_manager import CacheManager
 from src.web_search import WebSearchManager
 from src.feedback_manager import FeedbackManager
 from .trend_analyzer import TrendAnalyzer
-from .idea_generator import IdeaGenerator
 from .project_manager import ProjectManager
 from .content_generator import ContentGenerator
 from .article_assembler import ArticleAssembler
@@ -32,44 +40,31 @@ from .utils import setup_directory_structure
 class ArticlePipeline:
     """Main class for orchestrating the article generation pipeline."""
     
-    def __init__(self, openai_client: OpenAIClient, data_dir: Path):
+    def __init__(self, llm_client: LLMClient, data_dir: Path):
         """Initialize the article pipeline.
         
         Args:
-            openai_client: OpenAI client for API interactions
-            data_dir: Base directory for data storage
+            llm_client: LLM client for API interactions
+            data_dir: Directory to store pipeline data
         """
-        self.openai_client = openai_client
+        self.llm_client = llm_client
         self.data_dir = data_dir
         
-        # Initialize web search manager
-        self.web_search = WebSearchManager()
+        # Create required directories
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        (self.data_dir / "ideas").mkdir(parents=True, exist_ok=True)
+        (self.data_dir / "projects").mkdir(parents=True, exist_ok=True)
+        (self.data_dir / "feedback").mkdir(parents=True, exist_ok=True)
+        (self.data_dir / "searches").mkdir(parents=True, exist_ok=True)
         
         # Initialize components
-        self.trend_analyzer = TrendAnalyzer(openai_client, self.web_search)
-        self.idea_generator = IdeaGenerator(
-            openai_client=openai_client,
-            ideas_dir=data_dir / "ideas",
-            article_queue_dir=data_dir / "article_queue",
-            trend_analyzer=self.trend_analyzer
-        )
-        self.project_manager = ProjectManager(
-            openai_client=openai_client,
-            projects_dir=data_dir / "projects"
-        )
-        self.content_generator = ContentGenerator(
-            openai_client=openai_client,
-            projects_dir=data_dir / "projects"
-        )
-        self.article_assembler = ArticleAssembler(
-            openai_client=openai_client,
-            projects_dir=data_dir / "projects"
-        )
-        self.seo_optimizer = SEOOptimizer(
-            openai_client=openai_client,
-            projects_dir=data_dir / "projects"
-        )
-        self.feedback_manager = FeedbackManager(str(data_dir))
+        self.web_search = WebSearchManager(llm_client, data_dir)
+        self.trend_analyzer = TrendAnalyzer(llm_client, self.web_search)
+        self.project_manager = ProjectManager(llm_client, data_dir / "projects")
+        self.content_generator = ContentGenerator(llm_client, data_dir / "projects")
+        self.article_assembler = ArticleAssembler(llm_client, data_dir / "projects")
+        self.seo_optimizer = SEOOptimizer(llm_client, data_dir / "projects")
+        self.feedback_manager = FeedbackManager(data_dir / "projects")
     
     def analyze_trends(self, research_topic: str) -> Dict[str, Any]:
         """Analyze trends for a research topic.
@@ -93,101 +88,323 @@ class ArticlePipeline:
         """
         return self.trend_analyzer.research_competitors(research_topic)
     
-    def generate_ideas(self, research_topic: str, num_ideas: int = 5) -> List[Dict[str, str]]:
-        """Generate article ideas based on research topic.
+    def generate_ideas(self, research_topic: Optional[str] = None, num_ideas: int = None) -> List[Dict[str, Any]]:
+        """Generate article ideas.
         
         Args:
-            research_topic: Topic to generate ideas for
-            num_ideas: Number of ideas to generate
+            research_topic: Optional topic to research
+            num_ideas: Number of ideas to generate (default from RESEARCH_NUM_IDEAS env var)
             
         Returns:
-            List of generated idea dictionaries
+            List of generated ideas
         """
-        # First analyze trends and research competitors
-        trend_analysis = self.analyze_trends(research_topic)
-        competitor_research = self.research_competitors(research_topic)
+        logger.info("Generating article ideas")
         
-        # Generate ideas using the analysis
-        return self.idea_generator.generate_ideas(
-            research_topic=research_topic,
-            num_ideas=num_ideas,
-            trend_analysis=trend_analysis,
-            competitor_research=competitor_research
+        # Analyze trends
+        trends = self.trend_analyzer.analyze_trends(research_topic or "current trends")
+        
+        # Research competitors
+        competitors = self.trend_analyzer.research_competitors(research_topic or "current trends")
+        
+        # Use the provided num_ideas or get from environment
+        # Make sure we respect the value in .env file
+        if num_ideas is None:
+            num_ideas = int(os.getenv("RESEARCH_NUM_IDEAS", "3"))
+        
+        # Generate ideas using LLM
+        system_prompt = (
+            "You are an expert content strategist who generates article ideas. "
+            "Your ideas should be unique, valuable, and based on trend analysis."
         )
-    
-    def evaluate_ideas(self, max_ideas: int = 10) -> Optional[str]:
-        """Evaluate and select the best idea from the queue.
         
-        Args:
-            max_ideas: Maximum number of ideas to evaluate
-            
-        Returns:
-            ID of the selected idea or None if no suitable idea found
+        user_prompt = f"""Generate article ideas based on the following research:
+
+        Trend Analysis:
+        {json.dumps(trends, indent=2)}
+        
+        Competitor Research:
+        {json.dumps(competitors, indent=2)}
+        
+        Generate {num_ideas} unique article ideas that:
+        1. Address identified trends
+        2. Fill content gaps
+        3. Differentiate from competitors
+        4. Provide unique value
+        
+        Format each idea as a JSON object with:
+        - title: Article title
+        - description: Brief description
+        - target_audience: Target audience
+        - key_points: List of key points
+        - value_proposition: Unique value proposition
         """
-        return self.idea_generator.evaluate_ideas(max_ideas)
+        
+        try:
+            response = self.llm_client.chat_completion(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            
+            # Parse ideas
+            ideas = []
+            
+            # Try to parse the entire response as a JSON array first
+            try:
+                # Check if the response is a JSON array
+                if response.strip().startswith('[') and response.strip().endswith(']'):
+                    ideas = json.loads(response)
+                else:
+                    # Try to extract JSON objects from the text
+                    import re
+                    json_objects = re.findall(r'\{[^{}]*\}', response)
+                    for json_str in json_objects:
+                        try:
+                            idea = json.loads(json_str)
+                            ideas.append(idea)
+                        except json.JSONDecodeError:
+                            continue
+                    
+                    # If no JSON objects were found, create simple idea objects from the text
+                    if not ideas:
+                        lines = [line.strip() for line in response.split('\n') if line.strip()]
+                        for line in lines:
+                            if line.startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.', '10.')):
+                                # This looks like a numbered idea
+                                title = line.split('.', 1)[1].strip()
+                                ideas.append({'title': title, 'description': ''})
+            except Exception as e:
+                logger.warning(f"Error parsing ideas as JSON: {e}")
+                # Fallback: create simple idea objects
+                ideas = [{'title': f"Idea {i+1}", 'description': idea_text.strip()} 
+                         for i, idea_text in enumerate(response.split('\n\n')) if idea_text.strip()]
+            
+            # Save ideas
+            ideas_dir = self.data_dir / "ideas"
+            for i, idea in enumerate(ideas):
+                idea_file = ideas_dir / f"idea_{i + 1}.json"
+                with open(idea_file, "w") as f:
+                    json.dump(idea, f, indent=2)
+            
+            logger.info(f"Generated {len(ideas)} article ideas")
+            return ideas
+            
+        except Exception as e:
+            logger.error(f"Error generating ideas: {e}")
+            return []
+    
+    def evaluate_ideas(self) -> Optional[Dict[str, Any]]:
+        """Evaluate generated ideas and select the best one.
+        
+        Returns:
+            Selected idea or None if evaluation failed
+        """
+        logger.info("Evaluating article ideas")
+        
+        # Load generated ideas
+        ideas = []
+        ideas_dir = self.data_dir / "ideas"
+        
+        for idea_file in ideas_dir.glob("idea_*.json"):
+            try:
+                with open(idea_file) as f:
+                    idea = json.load(f)
+                    ideas.append(idea)
+            except Exception as e:
+                logger.error(f"Error loading idea file {idea_file}: {e}")
+        
+        if not ideas:
+            logger.error("No ideas found to evaluate")
+            return None
+        
+        # Evaluate ideas using LLM
+        system_prompt = (
+            "You are an expert content strategist who evaluates article ideas. "
+            "Your evaluation should consider potential impact and feasibility."
+        )
+        
+        user_prompt = f"""Evaluate the following article ideas:
+
+        {json.dumps(ideas, indent=2)}
+        
+        Select the best idea based on:
+        1. Market potential
+        2. Unique value proposition
+        3. Feasibility of execution
+        4. Alignment with trends
+        
+        Format your response as a JSON object with:
+        - selected_idea_index: Index of the selected idea (0-based)
+        - reasoning: Explanation of the selection
+        - improvements: Suggested improvements
+        """
+        
+        try:
+            response = self.llm_client.chat_completion(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1000
+            )
+            
+            # Parse evaluation
+            try:
+                evaluation = json.loads(response)
+                selected_index = evaluation.get("selected_idea_index")
+                
+                if selected_index is not None and 0 <= selected_index < len(ideas):
+                    selected_idea = ideas[selected_index]
+                    selected_idea["evaluation"] = {
+                        "reasoning": evaluation.get("reasoning", ""),
+                        "improvements": evaluation.get("improvements", "")
+                    }
+                    
+                    # Save selected idea
+                    selected_file = self.data_dir / "article_queue" / "selected_idea.json"
+                    selected_file.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    with open(selected_file, "w") as f:
+                        json.dump(selected_idea, f, indent=2)
+                    
+                    logger.info(f"Selected idea: {selected_idea['title']}")
+                    return selected_idea
+                
+            except json.JSONDecodeError:
+                logger.error("Error parsing evaluation response")
+            
+        except Exception as e:
+            logger.error(f"Error evaluating ideas: {e}")
+        
+        return None
     
     def create_project(self) -> Optional[str]:
-        """Create a new project from the selected idea.
+        """Create a project from the selected idea.
         
         Returns:
-            Project ID if successful, None otherwise
+            Project ID or None if creation failed
         """
-        return self.project_manager.create_project()
+        logger.info("Creating project from selected idea")
+        
+        # Load selected idea
+        selected_file = self.data_dir / "article_queue" / "selected_idea.json"
+        if not selected_file.exists():
+            logger.error("No selected idea found")
+            return None
+        
+        try:
+            with open(selected_file) as f:
+                idea = json.load(f)
+            
+            # Create project
+            project_id = self.project_manager.create_project(idea)
+            if project_id:
+                logger.info(f"Created project: {project_id}")
+                return project_id
+            
+        except Exception as e:
+            logger.error(f"Error creating project: {e}")
+        
+        return None
     
-    def generate_outline(self, project_id: str) -> Optional[List[str]]:
+    def generate_outline(self, project_id: str) -> bool:
         """Generate an outline for a project.
         
         Args:
-            project_id: ID of the project to generate outline for
-            
-        Returns:
-            List of outline sections if successful, None otherwise
-        """
-        return self.content_generator.generate_outline(project_id)
-    
-    def generate_paragraphs(self, project_id: str) -> bool:
-        """Generate paragraphs for a project's outline.
-        
-        Args:
-            project_id: ID of the project to generate paragraphs for
+            project_id: ID of the project
             
         Returns:
             True if successful, False otherwise
         """
-        return self.content_generator.generate_paragraphs(project_id)
+        logger.info(f"Generating outline for project: {project_id}")
+        
+        try:
+            outline = self.content_generator.generate_outline(project_id)
+            return bool(outline)
+            
+        except Exception as e:
+            logger.error(f"Error generating outline: {e}")
+            return False
     
-    def assemble_article(self, project_id: str) -> Optional[Dict[str, str]]:
-        """Assemble the article from generated paragraphs.
+    def generate_paragraphs(self, project_id: str) -> bool:
+        """Generate paragraphs for a project.
         
         Args:
-            project_id: ID of the project to assemble article for
+            project_id: ID of the project
             
         Returns:
-            Dictionary containing assembled article data if successful, None otherwise
+            True if successful, False otherwise
         """
-        return self.article_assembler.assemble_article(project_id)
+        logger.info(f"Generating paragraphs for project: {project_id}")
+        
+        try:
+            paragraphs = self.content_generator.generate_paragraphs(project_id)
+            return bool(paragraphs)
+            
+        except Exception as e:
+            logger.error(f"Error generating paragraphs: {e}")
+            return False
     
-    def refine_article(self, project_id: str) -> Optional[Dict[str, str]]:
-        """Refine the assembled article.
+    def assemble_article(self, project_id: str) -> bool:
+        """Assemble an article for a project.
         
         Args:
-            project_id: ID of the project to refine article for
+            project_id: ID of the project
             
         Returns:
-            Dictionary containing refined article data if successful, None otherwise
+            True if successful, False otherwise
         """
-        return self.article_assembler.refine_article(project_id)
+        logger.info(f"Assembling article for project: {project_id}")
+        
+        try:
+            article = self.article_assembler.assemble_article(project_id)
+            return bool(article)
+            
+        except Exception as e:
+            logger.error(f"Error assembling article: {e}")
+            return False
     
-    def optimize_seo(self, project_id: str) -> Optional[Dict[str, str]]:
-        """Optimize the article for SEO.
+    def refine_article(self, project_id: str) -> Dict[str, Any]:
+        """Refine an article for a project.
         
         Args:
-            project_id: ID of the project to optimize SEO for
+            project_id: ID of the project
             
         Returns:
-            Dictionary containing SEO-optimized article data if successful, None otherwise
+            Dictionary containing the refined article or empty dict if failed
         """
-        return self.seo_optimizer.optimize_seo(project_id)
+        logger.info(f"Refining article for project: {project_id}")
+        
+        try:
+            refined = self.article_assembler.refine_article(project_id)
+            return refined
+            
+        except Exception as e:
+            logger.error(f"Error refining article: {e}")
+            return {}
+    
+    def optimize_seo(self, project_id: str) -> Dict[str, Any]:
+        """Optimize an article for SEO.
+        
+        Args:
+            project_id: ID of the project
+            
+        Returns:
+            Dictionary containing the optimized article data if successful, empty dict otherwise
+        """
+        logger.info(f"Optimizing SEO for project: {project_id}")
+        
+        try:
+            optimized = self.seo_optimizer.optimize_article(project_id)
+            return optimized
+            
+        except Exception as e:
+            logger.error(f"Error optimizing SEO: {e}")
+            return {}
     
     def publish_to_medium(self, project_id: str, tags: Optional[List[str]] = None, status: str = "draft") -> Dict[str, Any]:
         """Publish the article to Medium.
@@ -202,39 +419,49 @@ class ArticlePipeline:
         """
         return self.article_assembler.publish_to_medium(project_id, tags, status)
     
-    def record_metrics(self, project_id: str) -> bool:
-        """Record performance metrics for a published article.
+    def analyze_feedback(self, project_id: str, feedback: str) -> bool:
+        """Analyze feedback for an article.
         
         Args:
-            project_id: ID of the project to record metrics for
+            project_id: ID of the project
+            feedback: Feedback text to analyze
             
         Returns:
             True if successful, False otherwise
         """
-        if not self.feedback_manager:
-            logger.warning("Feedback manager not initialized - cannot record metrics")
+        logger.info(f"Analyzing feedback for project: {project_id}")
+        
+        try:
+            analysis = self.feedback_manager.analyze_feedback(project_id, feedback)
+            return bool(analysis)
+            
+        except Exception as e:
+            logger.error(f"Error analyzing feedback: {e}")
             return False
-        return self.feedback_manager.record_article_metrics(project_id)
     
-    def run_full_pipeline(self, research_topic: str = None, num_ideas: int = 5, 
-                    max_ideas_to_evaluate: int = 10) -> Optional[Dict[str, str]]:
+    def run_full_pipeline(self, research_topic: str = None, num_ideas: int = None, 
+                    max_ideas_to_evaluate: int = None) -> Optional[Dict[str, str]]:
         """Run the complete article generation pipeline.
         
         Args:
             research_topic: Topic to research and generate article about
-            num_ideas: Number of ideas to generate
-            max_ideas_to_evaluate: Maximum number of ideas to evaluate
+            num_ideas: Number of ideas to generate (default from RESEARCH_NUM_IDEAS env var)
+            max_ideas_to_evaluate: Maximum number of ideas to evaluate (default from RESEARCH_MAX_IDEAS env var)
             
         Returns:
             Dictionary containing the generated article data or None if failed
         """
         try:
+            # Get max_ideas_to_evaluate from environment if not provided
+            if max_ideas_to_evaluate is None:
+                max_ideas_to_evaluate = int(os.getenv("RESEARCH_MAX_IDEAS", "10"))
+                
             # Step 1: Analyze trends
             trend_analysis = self.analyze_trends(research_topic)
             
             # Step 2: Generate and evaluate ideas
             ideas = self.generate_ideas(research_topic, num_ideas)
-            selected_idea = self.evaluate_ideas(max_ideas=max_ideas_to_evaluate)
+            selected_idea = self.evaluate_ideas()
             
             if not selected_idea:
                 logger.error("No suitable idea selected")
@@ -279,4 +506,4 @@ class ArticlePipeline:
             
         except Exception as e:
             logger.error(f"Error in pipeline execution: {e}")
-            return None 
+            return None

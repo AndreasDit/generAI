@@ -238,14 +238,16 @@ class ArticlePipeline:
         
         Select the best idea based on:
         1. Market potential
-        2. Unique value proposition
-        3. Feasibility of execution
+        2. Value proposition
+        3. Potential for engagement
         4. Alignment with trends
         
         Format your response as a JSON object with:
         - selected_idea_index: Index of the selected idea (0-based)
         - reasoning: Explanation of the selection
         - improvements: Suggested improvements
+        
+        Return ONLY the JSON object, nothing else. No identifer that this is a JSON object.
         """
         
         try:
@@ -257,11 +259,14 @@ class ArticlePipeline:
                 temperature=0.7,
                 max_tokens=1000
             )
+            logger.info(f"Evaluation response")
             
             # Parse evaluation
             try:
                 evaluation = json.loads(response)
+                logger.info(f"Selected idea index: {evaluation}")
                 selected_index = evaluation.get("selected_idea_index")
+                logger.info(f"Selected idea index: {selected_index}, {evaluation}")
                 
                 if selected_index is not None and 0 <= selected_index < len(ideas):
                     selected_idea = ideas[selected_index]

@@ -276,7 +276,7 @@ def run_modular_mode(args, config):
     
     if args.evaluate_ideas:
         max_ideas = args.max_ideas or config.get("max_ideas", 10)
-        selected_idea = pipeline.evaluate_ideas(max_ideas=max_ideas)
+        selected_idea = pipeline.evaluate_ideas()
         if selected_idea:
             print(f"Selected idea: {selected_idea}")
         else:

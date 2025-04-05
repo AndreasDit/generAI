@@ -283,7 +283,7 @@ def run_modular_mode(args, config):
             print("No suitable idea selected.")
     
     if args.create_project:
-        project_id = pipeline.create_project()
+        project_id = pipeline.create_project(project_id=args.project_id)
         if project_id:
             print(f"Created project with ID: {project_id}")
         else:

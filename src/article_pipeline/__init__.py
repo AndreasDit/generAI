@@ -338,7 +338,7 @@ class ArticlePipeline:
         
         return None
     
-    def create_project(self) -> Optional[str]:
+    def create_project(self, project_id: str = None) -> Optional[str]:
         """Create a project from the selected idea.
         
         Returns:
@@ -347,7 +347,8 @@ class ArticlePipeline:
         logger.info("Creating project from selected idea")
         
         # Load selected idea
-        selected_file = self.data_dir / "article_queue" / "selected_idea.json"
+        selected_file = self.data_dir / "article_queue" / f"{project_id}.json"
+        logger.info(f"Selected file: {selected_file}")
         if not selected_file.exists():
             logger.error("No selected idea found")
             return None
@@ -360,6 +361,23 @@ class ArticlePipeline:
             project_id = self.project_manager.create_project(idea)
             if project_id:
                 logger.info(f"Created project: {project_id}")
+                
+                # Move the selected idea file to the project folder
+                project_dir = self.data_dir / "projects" / project_id
+                project_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Copy the idea to the project folder
+                project_idea_file = project_dir / "idea.json"
+                with open(project_idea_file, "w") as f:
+                    json.dump(idea, f, indent=2)
+                
+                # Remove the file from article_queue
+                try:
+                    selected_file.unlink()
+                    logger.info(f"Removed selected idea file from article_queue: {selected_file}")
+                except Exception as e:
+                    logger.error(f"Error removing selected idea file from article_queue: {e}")
+                
                 return project_id
             
         except Exception as e:

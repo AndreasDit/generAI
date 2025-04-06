@@ -516,83 +516,163 @@ class ArticlePipeline:
             logger.error(f"Error analyzing feedback: {e}")
             return False
     
-    def process_next_article(self) -> Optional[Dict[str, str]]:
+    def process_next_article(self, project_id: Optional[str] = None) -> Optional[Dict[str, str]]:
         """Process the next article from the queue through all pipeline steps.
         
-        This method takes the next article idea from the queue and processes it through
-        all the pipeline steps: creating a project, generating an outline, generating
-        paragraphs, assembling the article, refining it, and optimizing SEO.
+        This method either takes the next article idea from the queue or continues processing
+        an existing project through the pipeline steps: creating a project, generating an outline, 
+        generating paragraphs, assembling the article, refining it, and optimizing SEO.
+        
+        Args:
+            project_id: Optional ID of an existing project to continue processing.
+                        If provided, will continue from the last successful step.
+                        If None, will process the next article from the queue.
         
         Returns:
             Dictionary containing the generated article data or None if failed
         """
         try:
-            # Get the next article from the queue
-            article_queue_dir = self.data_dir / "article_queue"
-            if not article_queue_dir.exists() or not any(article_queue_dir.iterdir()):
-                logger.error("No articles in the queue")
-                return None
+            # If project_id is provided, continue from the last successful step
+            if project_id:
+                logger.info(f"Continuing processing for existing project: {project_id}")
                 
-            # Get the oldest file in the queue (first in, first out)
-            queue_files = sorted(article_queue_dir.glob("*.json"))
-            if not queue_files:
-                logger.error("No article files found in the queue")
-                return None
+                # Check if project exists
+                project_dir = self.projects_dir / project_id
+                if not project_dir.exists():
+                    logger.error(f"Project not found: {project_id}")
+                    return None
                 
-            selected_file = queue_files[0]
-            logger.info(f"Processing article from queue: {selected_file.name}")
-            
-            # Load the idea
-            with open(selected_file) as f:
-                idea = json.load(f)
-            
-            # Create project
-            project_id = self.project_manager.create_project(idea)
-            if not project_id:
-                logger.error("Failed to create project")
-                return None
+                # Load project metadata to determine the last successful step
+                metadata_file = project_dir / "metadata.json"
+                if not metadata_file.exists():
+                    logger.error(f"Project metadata not found: {project_id}")
+                    return None
                 
-            # Remove the file from the queue
-            try:
-                selected_file.unlink()
-                logger.info(f"Removed article file from queue: {selected_file}")
-            except Exception as e:
-                logger.error(f"Error removing article file from queue: {e}")
+                with open(metadata_file) as f:
+                    metadata = json.load(f)
+                
+                # Get current status
+                current_status = metadata.get("status", "created")
+                logger.info(f"Current project status: {current_status}")
+                
+                # Continue from the last successful step
+                if current_status == "created":
+                    # Generate outline
+                    outline = self.generate_outline(project_id)
+                    if not outline:
+                        logger.error(f"Failed to generate outline for project {project_id}")
+                        return None
+                    current_status = "outline_generated"
+                
+                if current_status == "outline_generated":
+                    # Generate paragraphs
+                    if not self.generate_paragraphs(project_id):
+                        logger.error(f"Failed to generate paragraphs for project {project_id}")
+                        return None
+                    current_status = "paragraphs_generated"
+                
+                if current_status == "paragraphs_generated":
+                    # Assemble article
+                    article = self.assemble_article(project_id)
+                    if not article:
+                        logger.error(f"Failed to assemble article for project {project_id}")
+                        return None
+                    current_status = "article_assembled"
+                
+                if current_status == "article_assembled":
+                    # Refine article
+                    refined_article = self.refine_article(project_id)
+                    if not refined_article:
+                        logger.error(f"Failed to refine article for project {project_id}")
+                        return None
+                    current_status = "article_refined"
+                
+                # if current_status == "article_refined":
+                #     # Optimize SEO
+                #     final_article = self.optimize_seo(project_id)
+                #     if not final_article:
+                #         logger.error(f"Failed to optimize SEO for project {project_id}")
+                #         return None
+                #     current_status = "article_optimized"
+                
+                # logger.info(f"Successfully continued processing for project {project_id}")
+                
+                # Return the final article if we've reached the end of the pipeline
+                if current_status == "article_refined":
+                    return final_article
+                else:
+                    # Return the current state of the project
+                    return {"project_id": project_id, "status": current_status}
             
-            # Generate outline
-            outline = self.generate_outline(project_id)
-            if not outline:
-                logger.error(f"Failed to generate outline for project {project_id}")
-                return None
-            
-            # Generate paragraphs
-            if not self.generate_paragraphs(project_id):
-                logger.error(f"Failed to generate paragraphs for project {project_id}")
-                return None
-            
-            # Assemble article
-            article = self.assemble_article(project_id)
-            if not article:
-                logger.error(f"Failed to assemble article for project {project_id}")
-                return None
-            
-            # Refine article
-            refined_article = self.refine_article(project_id)
-            if not refined_article:
-                logger.error(f"Failed to refine article for project {project_id}")
-                return None
-            
-            # Optimize SEO
-            final_article = self.optimize_seo(project_id)
-            if not final_article:
-                logger.error(f"Failed to optimize SEO for project {project_id}")
-                return None
-            
-            logger.info(f"Successfully processed article from queue for project {project_id}")
-            return final_article
+            # If no project_id is provided, process the next article from the queue
+            else:
+                # Get the next article from the queue
+                article_queue_dir = self.data_dir / "article_queue"
+                if not article_queue_dir.exists() or not any(article_queue_dir.iterdir()):
+                    logger.error("No articles in the queue")
+                    return None
+                    
+                # Get the oldest file in the queue (first in, first out)
+                queue_files = sorted(article_queue_dir.glob("*.json"))
+                if not queue_files:
+                    logger.error("No article files found in the queue")
+                    return None
+                    
+                selected_file = queue_files[0]
+                logger.info(f"Processing article from queue: {selected_file.name}")
+                
+                # Load the idea
+                with open(selected_file) as f:
+                    idea = json.load(f)
+                
+                # Create project
+                project_id = self.project_manager.create_project(idea)
+                if not project_id:
+                    logger.error("Failed to create project")
+                    return None
+                    
+                # Remove the file from the queue
+                try:
+                    selected_file.unlink()
+                    logger.info(f"Removed article file from queue: {selected_file}")
+                except Exception as e:
+                    logger.error(f"Error removing article file from queue: {e}")
+                
+                # Generate outline
+                outline = self.generate_outline(project_id)
+                if not outline:
+                    logger.error(f"Failed to generate outline for project {project_id}")
+                    return None
+                
+                # Generate paragraphs
+                if not self.generate_paragraphs(project_id):
+                    logger.error(f"Failed to generate paragraphs for project {project_id}")
+                    return None
+                
+                # Assemble article
+                article = self.assemble_article(project_id)
+                if not article:
+                    logger.error(f"Failed to assemble article for project {project_id}")
+                    return None
+                
+                # Refine article
+                refined_article = self.refine_article(project_id)
+                if not refined_article:
+                    logger.error(f"Failed to refine article for project {project_id}")
+                    return None
+                
+                final_article = refined_article
+                # # Optimize SEO
+                # final_article = self.optimize_seo(project_id)
+                # if not final_article:
+                #     logger.error(f"Failed to optimize SEO for project {project_id}")
+                #     return None
+                
+                logger.info(f"Successfully processed article from queue for project {project_id}")
+                return final_article
             
         except Exception as e:
-            logger.error(f"Error processing article from queue: {e}")
+            logger.error(f"Error processing article: {e}")
             return None
     
     def run_full_pipeline(self, research_topic: str = None, num_ideas: int = None, 

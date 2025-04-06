@@ -85,7 +85,7 @@ class ArticleAssembler:
                 ],
                 temperature=0.7,
                 max_tokens=2000,
-                use_text_generation_model=True
+                use_text_generation_model=False
             )
             
             # Parse the assembled article

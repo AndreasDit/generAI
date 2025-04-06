@@ -319,9 +319,9 @@ def run_modular_mode(args, config):
         if article:
             print(f"Assembled article for project {args.project_id}:")
             print(f"Title: {article.get('title', 'No title')}")
-            print(f"Content: {article.get('content', 'No content')[:200]}...")
+            print(f"Content length: {len(article.get('content', ''))} characters")
         else:
-            print(f"Failed to assemble article for project {args.project_id}.")
+            print(f"Failed to assemble article for project {args.project_id}")
     
     if args.refine_article:
         if not args.project_id:

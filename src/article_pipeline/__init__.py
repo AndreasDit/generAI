@@ -426,24 +426,24 @@ class ArticlePipeline:
             logger.error(f"Error generating paragraphs: {e}")
             return False
     
-    def assemble_article(self, project_id: str) -> bool:
+    def assemble_article(self, project_id: str) -> Dict[str, Any]:
         """Assemble an article for a project.
         
         Args:
             project_id: ID of the project
             
         Returns:
-            True if successful, False otherwise
+            Dictionary containing the assembled article or empty dict if failed
         """
         logger.info(f"Assembling article for project: {project_id}")
         
         try:
             article = self.article_assembler.assemble_article(project_id)
-            return bool(article)
+            return article
             
         except Exception as e:
             logger.error(f"Error assembling article: {e}")
-            return False
+            return {}
     
     def refine_article(self, project_id: str) -> Dict[str, Any]:
         """Refine an article for a project.

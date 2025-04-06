@@ -109,7 +109,7 @@ class IdeaGenerator:
         user_prompt = f"""Generate {num_ideas} unique article ideas related to '{research_topic}'.{trend_analysis_text}{competitor_research_text}
         
         For each idea, provide:
-        1. A compelling title
+        1. A compelling title, do mention the year only sometimes in the title
         2. A brief description of the content
         3. The target audience
         4. Key points to cover

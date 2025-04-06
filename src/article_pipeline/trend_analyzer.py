@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from datetime import datetime
 
 from loguru import logger
 
@@ -67,7 +68,11 @@ class TrendAnalyzer:
             # Clean up the response to get just the search term
             search_term = response.strip()
             
-            logger.info(f"Transformed search term: {search_term}")
+            # Add the current year to focus on recent results
+            current_year = datetime.now().year
+            search_term = f"{search_term} Focus on results from the year {current_year}"
+            
+            logger.info(f"Transformed search term with year: {search_term}")
             return search_term
             
         except Exception as e:
@@ -87,8 +92,7 @@ class TrendAnalyzer:
         logger.info(f"Analyzing trends for topic: {research_topic}")
         
         # Transform the research topic into an effective search term
-        # search_term = self.transform_search_term(research_topic)
-        search_term = research_topic
+        search_term = self.transform_search_term(research_topic)
         logger.info(f"Using transformed search term: {search_term}")
         
         # Search for trending content using the transformed search term
@@ -183,8 +187,7 @@ class TrendAnalyzer:
         logger.info(f"Researching competitors for topic: {research_topic}")
         
         # Transform the research topic into an effective search term
-        # search_term = self.transform_search_term(research_topic)
-        search_term = research_topic
+        search_term = self.transform_search_term(research_topic)
         logger.info(f"Using transformed search term for competitor research: {search_term}")
         
         # Search for competitor content using the transformed search term
@@ -265,4 +268,4 @@ class TrendAnalyzer:
                 "raw_competitors": competitors,
                 "original_topic": research_topic,
                 "search_term": search_term
-            } 
+            }

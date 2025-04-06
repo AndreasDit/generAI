@@ -318,8 +318,7 @@ def run_modular_mode(args, config):
         article = pipeline.assemble_article(args.project_id)
         if article:
             print(f"Assembled article for project {args.project_id}:")
-            print(f"Title: {article.get('title', 'No title')}")
-            print(f"Content length: {len(article.get('content', ''))} characters")
+            print(f"Content length: {len(article)} characters")
         else:
             print(f"Failed to assemble article for project {args.project_id}")
     

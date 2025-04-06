@@ -94,6 +94,8 @@ def setup_argparse() -> argparse.ArgumentParser:
     # Pipeline control options
     modular_parser.add_argument("--run-full-pipeline", action="store_true", 
                         help="Run the complete article generation pipeline")
+    modular_parser.add_argument("--process-next-article", action="store_true",
+                        help="Process the next article from the queue through all pipeline steps")
     modular_parser.add_argument("--data-dir", type=str, default="data",
                         help="Directory for storing article data")
     
@@ -380,6 +382,14 @@ def run_modular_mode(args, config):
             print(f"Pipeline completed successfully. Article saved to: {result.get('file_path')}")
         else:
             print("Pipeline failed.")
+            
+    if args.process_next_article:
+        result = pipeline.process_next_article()
+        if result:
+            print(f"Successfully processed article from queue. Article saved to project directory.")
+            print(f"Content length: {len(result)} characters")
+        else:
+            print("Failed to process article from queue.")
 
 
 def publish_to_medium(config, article, args) -> Dict[str, Any]:

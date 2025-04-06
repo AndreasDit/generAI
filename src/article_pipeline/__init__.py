@@ -516,6 +516,85 @@ class ArticlePipeline:
             logger.error(f"Error analyzing feedback: {e}")
             return False
     
+    def process_next_article(self) -> Optional[Dict[str, str]]:
+        """Process the next article from the queue through all pipeline steps.
+        
+        This method takes the next article idea from the queue and processes it through
+        all the pipeline steps: creating a project, generating an outline, generating
+        paragraphs, assembling the article, refining it, and optimizing SEO.
+        
+        Returns:
+            Dictionary containing the generated article data or None if failed
+        """
+        try:
+            # Get the next article from the queue
+            article_queue_dir = self.data_dir / "article_queue"
+            if not article_queue_dir.exists() or not any(article_queue_dir.iterdir()):
+                logger.error("No articles in the queue")
+                return None
+                
+            # Get the oldest file in the queue (first in, first out)
+            queue_files = sorted(article_queue_dir.glob("*.json"))
+            if not queue_files:
+                logger.error("No article files found in the queue")
+                return None
+                
+            selected_file = queue_files[0]
+            logger.info(f"Processing article from queue: {selected_file.name}")
+            
+            # Load the idea
+            with open(selected_file) as f:
+                idea = json.load(f)
+            
+            # Create project
+            project_id = self.project_manager.create_project(idea)
+            if not project_id:
+                logger.error("Failed to create project")
+                return None
+                
+            # Remove the file from the queue
+            try:
+                selected_file.unlink()
+                logger.info(f"Removed article file from queue: {selected_file}")
+            except Exception as e:
+                logger.error(f"Error removing article file from queue: {e}")
+            
+            # Generate outline
+            outline = self.generate_outline(project_id)
+            if not outline:
+                logger.error(f"Failed to generate outline for project {project_id}")
+                return None
+            
+            # Generate paragraphs
+            if not self.generate_paragraphs(project_id):
+                logger.error(f"Failed to generate paragraphs for project {project_id}")
+                return None
+            
+            # Assemble article
+            article = self.assemble_article(project_id)
+            if not article:
+                logger.error(f"Failed to assemble article for project {project_id}")
+                return None
+            
+            # Refine article
+            refined_article = self.refine_article(project_id)
+            if not refined_article:
+                logger.error(f"Failed to refine article for project {project_id}")
+                return None
+            
+            # Optimize SEO
+            final_article = self.optimize_seo(project_id)
+            if not final_article:
+                logger.error(f"Failed to optimize SEO for project {project_id}")
+                return None
+            
+            logger.info(f"Successfully processed article from queue for project {project_id}")
+            return final_article
+            
+        except Exception as e:
+            logger.error(f"Error processing article from queue: {e}")
+            return None
+    
     def run_full_pipeline(self, research_topic: str = None, num_ideas: int = None, 
                     max_ideas_to_evaluate: int = None) -> Optional[Dict[str, str]]:
         """Run the complete article generation pipeline.

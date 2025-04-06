@@ -241,7 +241,7 @@ class ArticleAssembler:
         {idea_context}        
                 
         This is the article content:
-        {article['content']}
+        {article}
                 
         The refined article should:
         1. Have improved clarity and readability

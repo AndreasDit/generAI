@@ -329,8 +329,8 @@ def run_modular_mode(args, config):
         refined_article = pipeline.refine_article(args.project_id)
         if refined_article:
             print(f"Refined article for project {args.project_id}:")
-            print(f"Title: {refined_article.get('title', 'No title')}")
-            print(f"Content: {refined_article.get('content', 'No content')[:200]}...")
+            print(f"Content length: {len(refined_article)} characters")
+            print(f"Content: {refined_article[:200]}...")
         else:
             print(f"Failed to refine article for project {args.project_id}.")
     

@@ -134,10 +134,12 @@ class ArticlePipeline:
         {json.dumps(competitors, indent=2)}
         
         Generate {num_ideas} unique article ideas that:
-        1. Address identified trends
-        2. Fill content gaps
-        3. Differentiate from competitors
-        4. Provide unique value
+        1. Each idea focusses specifically on one trend or on one approach a competitor is using
+        2. Are aligned with the overall research
+        3. Are specific to the target audience
+        4. Are innovative and original
+        5. Fill content gaps
+        6. Provide unique value
         
         Format each idea as a JSON object with:
         - title: Article title

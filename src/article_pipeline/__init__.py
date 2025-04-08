@@ -455,9 +455,9 @@ class ArticlePipeline:
                 # Continue with original tweets if refinement fails
             
             # Save tweets to X_POSTS_INPUT_DIR
-            morning_file = x_posts_path / f"tweet_morning_{tomorrow.strftime('%Y%m%d')}_{morning_tweet['id']}.json"
-            afternoon_file = x_posts_path / f"tweet_afternoon_{tomorrow.strftime('%Y%m%d')}_{afternoon_tweet['id']}.json"
-            evening_file = x_posts_path / f"tweet_evening_{tomorrow.strftime('%Y%m%d')}_{evening_tweet['id']}.json"
+            morning_file = x_posts_path / f"{morning_tweet['id']}.json"
+            afternoon_file = x_posts_path / f"{afternoon_tweet['id']}.json"
+            evening_file = x_posts_path / f"{evening_tweet['id']}.json"
             
             with open(morning_file, "w") as f:
                 json.dump(morning_tweet, f, indent=2)

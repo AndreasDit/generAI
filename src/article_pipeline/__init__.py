@@ -523,6 +523,52 @@ class ArticlePipeline:
         
         return None
     
+    def perform_web_search(self, project_id: str) -> bool:
+        """Perform a web search based on the article idea and save results.
+        
+        Args:
+            project_id: ID of the project
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        logger.info(f"Performing web search for project: {project_id}")
+        
+        try:
+            # Get project data
+            project_dir = self.data_dir / "projects" / project_id
+            if not project_dir.exists():
+                logger.error(f"Project not found: {project_id}")
+                return False
+            
+            idea_file = project_dir / "idea.json"
+            if not idea_file.exists():
+                logger.error(f"Project idea not found: {project_id}")
+                return False
+            
+            with open(idea_file) as f:
+                idea = json.load(f)
+            
+            # Create search query based on the idea
+            title = idea.get('title', '')
+            description = idea.get('description', '')
+            search_query = f"{title} {description}"
+            
+            # Perform web search
+            search_results = self.web_search.search(query=search_query, max_results=5)
+            
+            # Save search results to project directory
+            search_results_file = project_dir / "search_results.json"
+            with open(search_results_file, "w") as f:
+                json.dump(search_results, f, indent=2)
+            
+            logger.info(f"Web search completed for project: {project_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error performing web search: {e}")
+            return False
+    
     def generate_outline(self, project_id: str) -> bool:
         """Generate an outline for a project.
         
@@ -692,6 +738,11 @@ class ArticlePipeline:
                 
                 # Continue from the last successful step
                 if current_status == "created":
+                    # Perform web search before outline generation
+                    search_success = self.perform_web_search(project_id)
+                    if not search_success:
+                        logger.warning(f"Web search failed for project {project_id}, continuing with outline generation")
+                    
                     # Generate outline
                     outline = self.generate_outline(project_id)
                     if not outline:
@@ -772,6 +823,11 @@ class ArticlePipeline:
                     logger.info(f"Removed article file from queue: {selected_file}")
                 except Exception as e:
                     logger.error(f"Error removing article file from queue: {e}")
+                
+                # Perform web search before outline generation
+                search_success = self.perform_web_search(project_id)
+                if not search_success:
+                    logger.warning(f"Web search failed for project {project_id}, continuing with outline generation")
                 
                 # Generate outline
                 outline = self.generate_outline(project_id)

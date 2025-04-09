@@ -47,6 +47,18 @@ class ContentGenerator:
         with open(idea_file) as f:
             idea = json.load(f)
         
+        # Check if web search results are available
+        search_results_file = project_dir / "search_results.json"
+        search_results_data = ""
+        if search_results_file.exists():
+            try:
+                with open(search_results_file) as f:
+                    search_results = json.load(f)
+                    search_results_data = f"\n\nWeb Search Results:\n{json.dumps(search_results.get('results', []), indent=2)}"
+                    logger.info(f"Incorporating web search results into outline generation for project: {project_id}")
+            except Exception as e:
+                logger.error(f"Error loading search results: {e}")
+        
         # Generate outline using LLM
         system_prompt = (
             "You are an expert content strategist who creates detailed article outlines. "
@@ -57,6 +69,8 @@ class ContentGenerator:
 
         Here is the idea data to inform your outline:
         {json.dumps(idea, indent=2)}
+        Here is some research:
+        {search_results_data}
         
         The outline should include:
         1. A compelling introduction
@@ -300,4 +314,4 @@ class ContentGenerator:
             json.dump(metadata, f, indent=2)
         
         logger.info(f"Generated paragraphs for project: {project_id}")
-        return paragraphs 
+        return paragraphs

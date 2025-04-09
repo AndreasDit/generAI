@@ -235,7 +235,7 @@ class ArticleAssembler:
         Value Proposition: {idea_data.get('value_proposition', 'No value proposition')}
         """
         
-        user_prompt = f"""Refine the following article:
+        user_prompt = f"""I want you to help me transform content to sound more natural and human by removing these 7 telltale signs of AI writing::
 
         This is the article idea:
         {idea_context}        
@@ -267,6 +267,21 @@ class ArticleAssembler:
         i) Use bold and italic formatting to emphasize words.
         j) Do not use emojis or hashtags
         k) Avoid overly promotional words like "game-changing," "unlock," "master," "skyrocket," or "revolutionize."
+
+        Focus on these topics:
+        1. Remove neutral, broad statements - Take a clear stance instead of sitting on the fence with generic, safe opinions that attempt to please everyone. Show conviction in your writing.
+
+        2. Break predictable structures - Avoid rigid patterns with uniformly sized paragraphs and repetitive transitions. Vary your structure to create a natural rhythm that feels human.
+
+        3. Eliminate perfect grammar and formality - Include strategic imperfections like sentence fragments, contractions, and occasional informality that reflect how real people write.
+
+        4. Replace generic examples with specific details - Move beyond shallow, generic references and include precise, contextual examples that demonstrate deep knowledge.
+
+        5. Develop a distinctive voice - Remove bland, characterless writing and inject personality with unique expressions and a consistent personal style.
+
+        6. Avoid academic language patterns - Replace stiff, formal phrasing with conversational elements like questions to readers and natural transitions.
+
+        7. Include unexpected insights and connections - Go beyond obvious points to offer creative associations and original perspectives that AI typically wouldn't generate.
 
         Remember, the goal is to make the text sound natural, engaging, and as if it were written by a human rather than an AI.
         

@@ -92,11 +92,11 @@ class TrendAnalyzer:
         logger.info(f"Analyzing trends for topic: {research_topic}")
         
         # Transform the research topic into an effective search term
-        search_term = self.transform_search_term(research_topic)
-        logger.info(f"Using transformed search term: {search_term}")
+        # search_term = self.transform_search_term(research_topic)
+        # logger.info(f"Using transformed search term: {search_term}")
         
         # Search for trending content using the transformed search term
-        search_results = self.web_search.search(search_term)
+        search_results = self.web_search.search(research_topic)
         
         # Extract relevant information from search results
         trends = []
@@ -187,11 +187,11 @@ class TrendAnalyzer:
         logger.info(f"Researching competitors for topic: {research_topic}")
         
         # Transform the research topic into an effective search term
-        search_term = self.transform_search_term(research_topic)
-        logger.info(f"Using transformed search term for competitor research: {search_term}")
+        # search_term = self.transform_search_term(research_topic)
+        # logger.info(f"Using transformed search term for competitor research: {search_term}")
         
         # Search for competitor content using the transformed search term
-        search_results = self.web_search.get_competitor_content(search_term)
+        search_results = self.web_search.get_competitor_content(research_topic)
         
         # Extract relevant information from search results
         competitors = []

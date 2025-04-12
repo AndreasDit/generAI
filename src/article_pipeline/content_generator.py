@@ -74,9 +74,8 @@ class ContentGenerator:
         
         The outline should include:
         1. A compelling introduction
-        2. 3-5 main sections with 2-3 subsections each
-        3. Key points to cover in each section
-        4. A strong conclusion
+        2. Key points to cover in each section
+        3. A strong conclusion
         
         Format your outline as follows:
         INTRODUCTION: [Brief description of the introduction]

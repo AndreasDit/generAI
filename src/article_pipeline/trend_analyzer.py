@@ -9,12 +9,12 @@ from loguru import logger
 
 from src.llm_client import LLMClient
 from src.web_search import BraveSearchManager
-
+from src.web_search import TavilySearchManager
 
 class TrendAnalyzer:
     """Analyzes trends and competitor content for article generation."""
     
-    def __init__(self, openai_client: LLMClient, web_search: BraveSearchManager):
+    def __init__(self, openai_client: LLMClient, web_search: TavilySearchManager):
         """Initialize the trend analyzer.
         
         Args:
@@ -97,6 +97,7 @@ class TrendAnalyzer:
         
         # Search for trending content using the transformed search term
         search_results = self.web_search.search(research_topic)
+        logger.info(f"Search results: {search_results}")  # Add this line to log search results
         
         # Extract relevant information from search results
         trends = []
@@ -160,7 +161,7 @@ class TrendAnalyzer:
             # Add raw search results and original topic
             analysis["raw_trends"] = trends
             analysis["original_topic"] = research_topic
-            analysis["search_term"] = search_term
+            # analysis["search_term"] = search_term
             
             return analysis
             
@@ -172,7 +173,7 @@ class TrendAnalyzer:
                 "recommendations": [],
                 "raw_trends": trends,
                 "original_topic": research_topic,
-                "search_term": search_term
+                # "search_term": search_term
             }
     
     def research_competitors(self, research_topic: str) -> Dict[str, Any]:
@@ -255,7 +256,7 @@ class TrendAnalyzer:
             # Add raw search results and original topic
             analysis["raw_competitors"] = competitors
             analysis["original_topic"] = research_topic
-            analysis["search_term"] = search_term
+            # analysis["search_term"] = search_term
             
             return analysis
             
@@ -267,5 +268,5 @@ class TrendAnalyzer:
                 "differentiation_opportunities": [],
                 "raw_competitors": competitors,
                 "original_topic": research_topic,
-                "search_term": search_term
+                # "search_term": search_term
             }

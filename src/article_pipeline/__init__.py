@@ -563,7 +563,7 @@ class ArticlePipeline:
             
             # Loop through search results and summarize the content
             for result in search_results['results']:
-                result['summary'] = self.web_search.summarize_content(result['content'])
+                result['summary'] = self.web_search.summarize_content(result['raw_content'], self.llm_client)
             
             # Save search results to project directory
             search_results_file = project_dir / "search_results.json"

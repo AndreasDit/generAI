@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Optional
 from loguru import logger
 import anthropic
 import openai
+import tiktoken
 
 from src.config import LLM_CONFIG
 
@@ -50,6 +51,113 @@ class OpenAIClient(LLMClient):
         self.text_generation_model = config.get("text_generation_model", self.model)
         self.max_tokens = config["max_tokens"]
         self.temperature = config["temperature"]
+        
+    def _count_tokens(self, messages: List[Dict[str, str]], model: str) -> int:
+        """Count the number of tokens in the messages.
+        
+        Args:
+            messages: List of message dictionaries with 'role' and 'content' keys
+            model: The model name to use for encoding
+            
+        Returns:
+            Number of tokens in the messages
+        """
+        try:
+            # Get the encoding for the model
+            encoding = tiktoken.encoding_for_model(model)
+            
+            # Default to cl100k_base encoding if model-specific encoding not found
+            if not encoding:
+                encoding = tiktoken.get_encoding("cl100k_base")
+                
+            num_tokens = 0
+            for message in messages:
+                # Add tokens for message format (3 tokens per message)
+                num_tokens += 3
+                
+                # Add tokens for content
+                if "content" in message and message["content"]:
+                    num_tokens += len(encoding.encode(message["content"]))
+                    
+                # Add tokens for role (1 token)
+                if "role" in message:
+                    num_tokens += 1
+                    
+            # Add tokens for message format (3 tokens at the end)
+            num_tokens += 3
+            
+            return num_tokens
+        except Exception as e:
+            logger.warning(f"Error counting tokens: {e}. Using a rough estimate instead.")
+            # Fallback to a rough estimate if tiktoken fails
+            return sum(len(m.get("content", "")) // 4 for m in messages)
+            
+    def _trim_messages(self, messages: List[Dict[str, str]], model: str, token_limit: int) -> List[Dict[str, str]]:
+        """Trim messages to fit within token limit while preserving system messages and recent messages.
+        
+        Args:
+            messages: List of message dictionaries with 'role' and 'content' keys
+            model: The model name to use for encoding
+            token_limit: Maximum number of tokens allowed
+            
+        Returns:
+            Trimmed list of messages that fits within the token limit
+        """
+        # Separate system messages from other messages
+        system_messages = [m for m in messages if m.get("role") == "system"]
+        non_system_messages = [m for m in messages if m.get("role") != "system"]
+        
+        # If we only have system messages and they're already over the limit,
+        # we need to truncate the content of the system messages
+        if not non_system_messages and system_messages:
+            system_tokens = self._count_tokens(system_messages, model)
+            if system_tokens > token_limit:
+                logger.warning("System messages alone exceed token limit. Truncating system message content.")
+                # Keep only the first system message and truncate it
+                encoding = tiktoken.encoding_for_model(model) or tiktoken.get_encoding("cl100k_base")
+                first_system = system_messages[0]
+                content = first_system["content"]
+                # Approximate number of tokens to keep (leaving room for message format tokens)
+                tokens_to_keep = token_limit - 10
+                encoded_content = encoding.encode(content)[:tokens_to_keep]
+                first_system["content"] = encoding.decode(encoded_content)
+                return [first_system]
+        
+        # Start with system messages as they're typically important context
+        trimmed_messages = system_messages.copy()
+        remaining_token_budget = token_limit - self._count_tokens(trimmed_messages, model)
+        
+        # Add messages from most recent to oldest until we hit the token limit
+        for message in reversed(non_system_messages):
+            message_tokens = self._count_tokens([message], model)
+            if message_tokens <= remaining_token_budget:
+                trimmed_messages.insert(len(system_messages), message)  # Insert after system messages
+                remaining_token_budget -= message_tokens
+            else:
+                # If we can't add even one message, we might need to truncate the last message
+                if not trimmed_messages or len(trimmed_messages) == len(system_messages):
+                    # Try to add a truncated version of the message if it's the only one
+                    try:
+                        encoding = tiktoken.encoding_for_model(model) or tiktoken.get_encoding("cl100k_base")
+                        content = message["content"]
+                        # Leave room for message format tokens
+                        tokens_to_keep = remaining_token_budget - 5
+                        if tokens_to_keep > 0:
+                            encoded_content = encoding.encode(content)[:tokens_to_keep]
+                            message["content"] = encoding.decode(encoded_content)
+                            trimmed_messages.insert(len(system_messages), message)
+                            logger.warning("Added truncated message to fit within token limit.")
+                    except Exception as e:
+                        logger.warning(f"Failed to truncate message: {e}")
+                break
+        
+        # If we couldn't add any non-system messages, log a warning
+        if len(trimmed_messages) == len(system_messages):
+            logger.warning("Could not add any non-system messages within token limit.")
+        else:
+            logger.info(f"Trimmed messages from {len(messages)} to {len(trimmed_messages)} to fit within token limit.")
+        
+        return trimmed_messages
     
     def chat_completion(self, messages: List[Dict[str, str]], temperature: Optional[float] = None, max_tokens: Optional[int] = None, use_text_generation_model: bool = False) -> str:
         """Generate a chat completion.
@@ -69,14 +177,33 @@ class OpenAIClient(LLMClient):
         
         # Choose the appropriate model
         model = self.text_generation_model if use_text_generation_model else self.model
+                
+        # Check if we need to apply token limits
+        if use_text_generation_model:
+            token_limit = 128000 # 128k tokens for GPT-4o
+        else:
+            token_limit = 16000 # 16k tokens for GPT-4o-mini
+        token_count = self._count_tokens(messages, model)
+        
+        # If messages exceed token limit, trim them
+        if token_count > token_limit:
+            logger.warning(f"Messages exceed token limit for {model} ({token_count} > {token_limit}). Trimming messages.")
+            messages = self._trim_messages(messages, model, token_limit)
         
         try:
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            logger.info(f"Calling OpenAI API with model: {model} and a total token input count from messages of {token_count}.")
+            if use_text_generation_model:
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            else:
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                )
             
             # Log token usage if available
             if hasattr(response, 'usage'):

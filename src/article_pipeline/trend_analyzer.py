@@ -96,12 +96,14 @@ class TrendAnalyzer:
         # logger.info(f"Using transformed search term: {search_term}")
         
         # Search for trending content using the transformed search term
+        logger.info(f"Searching for trending content for topic: {research_topic}") 
         search_results = self.web_search.search(research_topic)
         
         # Extract relevant information from search results
         trends = []
         extracted_contents = []
         
+        logger.info(f"Parsing search results")
         if "results" in search_results:
             # Add basic information to trends list
             for result in search_results["results"]:
@@ -122,17 +124,19 @@ class TrendAnalyzer:
                 
                 # Process extracted contents
                 for i, result in enumerate(search_results["results"]):
+                    condensed_content = self.web_search.condense_content(extracted_contents_list[i].get("content", ""), self.llm_client)
                     url = result.get("url", "")
                     if url and i < len(extracted_contents_list) and extracted_contents_list[i]["success"]:
                         extracted_contents.append({
                             "title": result.get("title", extracted_contents_list[i].get("title", "")),
                             "url": url,
-                            "content": extracted_contents_list[i].get("content", ""),
+                            "content": condensed_content,
                             "source": result.get("source", ""),
                             "date": result.get("date", "")
                         })
         
         # Analyze trends using LLM with extracted content
+        logger.info(f"Analyzing trends using LLM with extracted content")
         system_prompt = (
             "You are an expert content strategist who analyzes trends in content. "
             "Your analysis should identify patterns, emerging topics, and opportunities."
@@ -152,6 +156,7 @@ class TrendAnalyzer:
         """
         
         try:
+            logger.info(f"Generating LLM response")
             response = self.llm_client.chat_completion(
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -165,6 +170,7 @@ class TrendAnalyzer:
             analysis = {}
             current_section = None
             
+            logger.info(f"Parsing LLM response")
             for line in response.split("\n"):
                 line = line.strip()
                 if not line:
@@ -185,6 +191,7 @@ class TrendAnalyzer:
             # Add raw search results and original topic
             analysis["raw_trends"] = trends
             analysis["original_topic"] = research_topic
+            analysis["extracted_contents"] = extracted_contents
             # analysis["search_term"] = search_term
             
             return analysis

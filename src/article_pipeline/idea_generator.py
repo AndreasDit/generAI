@@ -137,6 +137,7 @@ class IdeaGenerator:
             
             content = response.choices[0].message.content
             ideas = self._parse_ideas(content)
+            ideas['research'] = trend_analysis['extracted_contents']
             
             # Save each idea
             for idea in ideas:

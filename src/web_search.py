@@ -278,6 +278,49 @@ class BraveSearchManager(SearchProvider):
         # Use the general search method with the competitor-focused query
         return self.search(query=query, search_depth="comprehensive", max_results=max_results)
 
+    def condense_content(self, content: str, llm_client: LLMClient) -> str:
+        """
+        Summarize the given content using the LLM client.
+        
+        Args:
+            content: The content to be summarized as a plain string
+            
+        Returns:
+            A summarized version of the input content
+        """
+        if not content:
+            return ""
+            
+        try:           
+            # Create a prompt for summarization
+            prompt = f"""
+            Craft a summary that is detailed, thorough, in-depth, and complex, while maintaining clarity and conciseness.
+            Incorporate main ideas and essential information, eliminating extraneous language and focusing on critical aspects.
+            Rely strictly on the provided text, without including external information.
+            Format the summary as a text that can be used as input for an LLM to generate a detailed article.
+            Do not use more then 1000 tokens for the summary.
+
+            Content to summarize:
+            {content}
+            
+            Summary:"""
+            
+            # Get the summary from the LLM
+            response = llm_client.chat_completion(
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that provides clear and concise summaries."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,  # Lower temperature for more focused summaries
+                max_tokens=500
+            )
+            
+            return response.strip()
+            
+        except Exception as e:
+            logger.error(f"Error condensing content: {e}")
+            return content  # Return original content if summarization fails
+
 
 class TavilySearchManager(SearchProvider):
     """Manages web searches using the Tavily API."""
@@ -356,6 +399,51 @@ class TavilySearchManager(SearchProvider):
         except Exception as e:
             logger.error(f"Error searching web: {e}")
             return {"results": [], "error": str(e)}
+    
+
+    def condense_content(self, content: str, llm_client: LLMClient) -> str:
+        """
+        Summarize the given content using the LLM client.
+        
+        Args:
+            content: The content to be summarized as a plain string
+            
+        Returns:
+            A summarized version of the input content
+        """
+        if not content:
+            return ""
+            
+        try:           
+            # Create a prompt for summarization
+            prompt = f"""
+            Craft a summary that is detailed, thorough, in-depth, and complex, while maintaining clarity and conciseness.
+            Incorporate main ideas and essential information, eliminating extraneous language and focusing on critical aspects.
+            Rely strictly on the provided text, without including external information.
+            Format the summary as a text that can be used as input for an LLM to generate a detailed article.
+            Do not use more then 1000 tokens for the summary.
+
+            Content to summarize:
+            {content}
+            
+            Summary:"""
+            
+            # Get the summary from the LLM
+            response = llm_client.chat_completion(
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that provides clear and concise summaries."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,  # Lower temperature for more focused summaries
+                max_tokens=500
+            )
+            
+            return response.strip()
+            
+        except Exception as e:
+            logger.error(f"Error condensing content: {e}")
+            return content  # Return original content if summarization fails
+
     
     def search_news(self, topic: str, max_results: int = 5) -> Dict[str, Any]:
         """Search for recent news articles related to the topic.

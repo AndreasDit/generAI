@@ -2,13 +2,13 @@
 
 import json
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
 
 from loguru import logger
 
 from src.llm_client import LLMClient
-from src.web_search import BraveSearchManager
+# from src.web_search import BraveSearchManager
 from src.web_search import TavilySearchManager
 
 class TrendAnalyzer:
@@ -19,7 +19,7 @@ class TrendAnalyzer:
         
         Args:
             openai_client: LLM client for API interactions
-            web_search: Web search manager for competitor research
+            web_search: Web search manager for competitor research (BraveSearchManager or TavilySearchManager)
         """
         self.llm_client = openai_client
         self.web_search = web_search
@@ -97,11 +97,13 @@ class TrendAnalyzer:
         
         # Search for trending content using the transformed search term
         search_results = self.web_search.search(research_topic)
-        logger.info(f"Search results: {search_results}")  # Add this line to log search results
         
         # Extract relevant information from search results
         trends = []
+        extracted_contents = []
+        
         if "results" in search_results:
+            # Add basic information to trends list
             for result in search_results["results"]:
                 trends.append({
                     "title": result.get("title", ""),
@@ -110,16 +112,38 @@ class TrendAnalyzer:
                     "source": result.get("source", ""),
                     "date": result.get("date", "")
                 })
+            
+            # Extract full content from all URLs in a single batch
+            urls = [result.get("url", "") for result in search_results["results"] if result.get("url", "")]
+            logger.info(f"Extracting content from URLs: {urls}")
+            if urls:
+                extracted_contents_list = self.web_search.extract_content_from_url(urls)
+                # logger.info(f"Extracted contents: {extracted_contents_list}")  # Add this line for debugging inf
+                
+                # Process extracted contents
+                for i, result in enumerate(search_results["results"]):
+                    url = result.get("url", "")
+                    if url and i < len(extracted_contents_list) and extracted_contents_list[i]["success"]:
+                        extracted_contents.append({
+                            "title": result.get("title", extracted_contents_list[i].get("title", "")),
+                            "url": url,
+                            "content": extracted_contents_list[i].get("content", ""),
+                            "source": result.get("source", ""),
+                            "date": result.get("date", "")
+                        })
         
-        # Analyze trends using LLM
+        # Analyze trends using LLM with extracted content
         system_prompt = (
             "You are an expert content strategist who analyzes trends in content. "
             "Your analysis should identify patterns, emerging topics, and opportunities."
         )
         
+        # Use extracted content if available, otherwise fall back to basic trends
+        content_for_analysis = extracted_contents if extracted_contents else trends
+        
         user_prompt = f"""Analyze the following trending content related to '{research_topic}' and identify key patterns and opportunities:
         
-        {json.dumps(trends, indent=2)}
+        {json.dumps(content_for_analysis, indent=2)}
         
         Provide your analysis in the following format:
         KEY_TRENDS: [List of 3-5 key trends identified]
@@ -196,7 +220,10 @@ class TrendAnalyzer:
         
         # Extract relevant information from search results
         competitors = []
+        extracted_contents = []
+        
         if "results" in search_results:
+            # Add basic information to competitors list
             for result in search_results["results"]:
                 competitors.append({
                     "title": result.get("title", ""),
@@ -205,16 +232,36 @@ class TrendAnalyzer:
                     "source": result.get("source", ""),
                     "date": result.get("date", "")
                 })
+            
+            # Extract full content from all URLs in a single batch
+            urls = [result.get("url", "") for result in search_results["results"] if result.get("url", "")]
+            if urls:
+                extracted_contents_list = self.web_search.extract_content_from_url(urls)
+                
+                # Process extracted contents
+                for i, result in enumerate(search_results["results"]):
+                    url = result.get("url", "")
+                    if url and i < len(extracted_contents_list) and extracted_contents_list[i]["success"]:
+                        extracted_contents.append({
+                            "title": result.get("title", extracted_contents_list[i].get("title", "")),
+                            "url": url,
+                            "content": extracted_contents_list[i].get("content", ""),
+                            "source": result.get("source", ""),
+                            "date": result.get("date", "")
+                        })
         
-        # Analyze competitors using LLM
+        # Analyze competitors using LLM with extracted content
         system_prompt = (
             "You are an expert content strategist who analyzes competitor content. "
             "Your analysis should identify strengths, weaknesses, and opportunities for differentiation."
         )
         
+        # Use extracted content if available, otherwise fall back to basic competitors
+        content_for_analysis = extracted_contents if extracted_contents else competitors
+        
         user_prompt = f"""Analyze the following competitor content related to '{research_topic}' and identify key insights:
         
-        {json.dumps(competitors, indent=2)}
+        {json.dumps(content_for_analysis, indent=2)}
         
         Provide your analysis in the following format:
         COMPETITOR_STRENGTHS: [List of 3-5 strengths of competitor content]

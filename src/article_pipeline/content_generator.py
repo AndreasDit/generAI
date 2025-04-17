@@ -88,6 +88,8 @@ class ContentGenerator:
           - Subsection 2.2: [Description]
         CONCLUSION: [Brief description of the conclusion]
         
+        No more than 3 main sections.
+        Each description should contain the following: detailed important points from the research, necessary hard facts, and necessary hard data
         Do not use any markdown or other formatting.
         """
         
@@ -122,7 +124,7 @@ class ContentGenerator:
                     outline[current_section] = line[11:].strip()
                 elif line.startswith("- "):
                     if current_section and current_section not in ["introduction", "conclusion"]:
-                        if ":" in line:
+                        if "section" in line.lower() or "subsection" in line.lower():
                             title = line[2:].split(":")[0].strip()
                             description = line[2:].split(":")[1].strip()
                             current_subsections.append({
@@ -130,10 +132,7 @@ class ContentGenerator:
                                 "description": description
                             })
                         else:
-                            current_subsections.append({
-                                "title": line[2:].strip(),
-                                "description": ""
-                            })
+                            current_subsections[-1]["description"] += "\n- " + line[2:].strip()
                 elif line.endswith(":"):
                     if current_section and current_section not in ["introduction", "conclusion"]:
                         outline[current_section] = current_subsections

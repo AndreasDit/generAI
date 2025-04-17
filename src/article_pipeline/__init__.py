@@ -31,6 +31,7 @@ import os
 from src.llm_client import LLMClient
 from src.cache_manager import CacheManager
 from src.web_search import BraveSearchManager
+from src.web_search import TavilySearchManager
 from src.feedback_manager import FeedbackManager
 from .trend_analyzer import TrendAnalyzer
 from .project_manager import ProjectManager
@@ -62,7 +63,8 @@ class ArticlePipeline:
         # Initialize components
         # Get web search configuration
         web_search_config = get_web_search_config()
-        self.web_search = BraveSearchManager(api_key=web_search_config["brave"]["api_key"])
+        # self.web_search = BraveSearchManager(api_key=web_search_config["brave"]["api_key"])
+        self.web_search = TavilySearchManager(api_key=web_search_config["tavily"]["api_key"])
         
         # Initialize trend analyzer with BraveSearchManager
         self.trend_analyzer = TrendAnalyzer(llm_client, self.web_search)
@@ -145,7 +147,7 @@ class ArticlePipeline:
         - title: Article title
         - description: Brief description
         - target_audience: Target audience
-        - key_points: List of key points
+        - key_points: List of key points, afterwards the key points from the trend analysis
         - value_proposition: Unique value proposition
         - id: Universally unique identifier for the idea
         """
@@ -555,7 +557,7 @@ class ArticlePipeline:
             search_query = f"{title} {description}"
             
             # Perform web search
-            search_results = self.web_search.search(query=search_query, max_results=5)
+            search_results = self.web_search.search(query=search_query, max_results=2, include_raw_content=True)
             
             # Save search results to project directory
             search_results_file = project_dir / "search_results.json"

@@ -236,7 +236,7 @@ class BraveSearchManager(SearchProvider):
             
             # Search for general information about the topic
             general_query = f"comprehensive information about {topic}"
-            general_results = self.search(query=general_query, search_depth="comprehensive", max_results=3)
+            general_results = self.search(query=general_query, search_depth="advanced", max_results=3)
             
             # Search for recent developments
             recent_query = f"recent developments in {topic} in the past 3 months"
@@ -311,7 +311,7 @@ class TavilySearchManager(SearchProvider):
         """
         return self.client is not None
     
-    def search(self, query: str, search_depth: str = "basic", max_results: int = 5) -> Dict[str, Any]:
+    def search(self, query: str, search_depth: str = "basic", max_results: int = 5, include_raw_content: bool = False) -> Dict[str, Any]:
         """Search the web for information related to the query.
         
         Args:
@@ -332,9 +332,11 @@ class TavilySearchManager(SearchProvider):
             # Set search parameters based on depth
             search_params = {
                 "query": query,
-                "search_depth": "comprehensive" if search_depth == "comprehensive" else "basic",
-                "max_results": max_results
+                "search_depth": "advanced" if search_depth == "advanced" else "basic",
+                "max_results": max_results,
+                "include_raw_content": include_raw_content
             }
+            logger.info(f"Search parameters: {search_params}")
             
             # Execute search
             response = self.client.search(**search_params)
@@ -429,7 +431,90 @@ class TavilySearchManager(SearchProvider):
         query = f"best articles about {topic}"
         
         # Use the general search method with the competitor-focused query
-        return self.search(query=query, search_depth="comprehensive", max_results=max_results)
+        return self.search(query=query, search_depth="advanced", max_results=max_results)
+
+    def extract_content_from_url(self, urls: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+        """Extract content from one or more URLs using Tavily's extract functionality.
+        
+        Args:
+            urls: A single URL or list of URLs to extract content from
+            
+        Returns:
+            Dictionary or list of dictionaries containing the extracted content and metadata
+        """
+        # Check if Tavily client is available
+        if not self.is_available():
+            logger.error("Cannot extract content: Tavily client not initialized")
+            if isinstance(urls, str):
+                return {
+                    "url": urls,
+                    "content": "",
+                    "title": "",
+                    "success": False,
+                    "error": "Tavily client not initialized"
+                }
+            else:
+                return [{
+                    "url": url,
+                    "content": "",
+                    "title": "",
+                    "success": False,
+                    "error": "Tavily client not initialized"
+                } for url in urls]
+        
+        # Handle single URL case
+        if isinstance(urls, str):
+            logger.info(f"Extracting content from URL: {urls}")
+            
+            try:
+                # Use Tavily's extract method to get the content
+                extracted_data = self.client.extract(urls=urls)
+                
+                # Return the extracted content and metadata
+                return {
+                    "url": urls,
+                    "content": extracted_data.get("raw_content", ""),
+                    "title": extracted_data.get("title", ""),
+                    "success": True
+                }
+                
+            except Exception as e:
+                logger.error(f"Error extracting content from URL {urls}: {e}")
+                return {
+                    "url": urls,
+                    "content": "",
+                    "title": "",
+                    "success": False,
+                    "error": str(e)
+                }
+        
+        # Handle list of URLs case
+        logger.info(f"Extracting content from {len(urls)} URLs")
+        results = []
+        
+        # Process each URL individually to avoid potential issues
+        for url in urls:
+            try:
+                # Extract content for each URL separately
+                extracted_data = self.client.extract(urls=url)['results'][0]
+                # logger.info(f"Extracted content from URL: {extracted_data}")
+                
+                results.append({
+                    "url": url,
+                    "content": extracted_data.get("raw_content", ""),
+                    "success": True
+                })
+                
+            except Exception as e:
+                logger.error(f"Error extracting content from URL {url}: {e}")
+                results.append({
+                    "url": url,
+                    "content": "",
+                    "success": False,
+                    "error": str(e)
+                })
+        
+        return results
 
 
 class WebSearchManager:

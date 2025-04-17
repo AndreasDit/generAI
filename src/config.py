@@ -54,7 +54,7 @@ WEB_SEARCH_CONFIG = {
     "tavily": {
         "api_key": os.getenv("TAVILY_API_KEY"),
         "max_results": 10,
-        "search_depth": "comprehensive"
+        "search_depth": "advanced"
     }
 }
 

@@ -54,7 +54,11 @@ class ContentGenerator:
             try:
                 with open(search_results_file) as f:
                     search_results = json.load(f)
+                    # drop the raw_content from the search results
+                    for result in search_results['results']:
+                        result.pop('raw_content', None)
                     search_results_data = f"\n\nWeb Search Results:\n{json.dumps(search_results.get('results', []), indent=2)}"
+                    
                     logger.info(f"Incorporating web search results into outline generation for project: {project_id}")
             except Exception as e:
                 logger.error(f"Error loading search results: {e}")
@@ -94,6 +98,9 @@ class ContentGenerator:
         """
         
         try:
+            # Log model and token usage info
+            token_count = len(user_prompt + system_prompt)
+            logger.info(f"Input tokens: {token_count}")
             response = self.llm_client.chat_completion(
                 messages=[
                     {"role": "system", "content": system_prompt},

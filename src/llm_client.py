@@ -63,20 +63,21 @@ class OpenAIClient(LLMClient):
         Returns:
             Generated text response
         """
+        logger.info("Prforming query to OpenAI")
         # Use instance values if not specified
         temperature = temperature if temperature is not None else self.temperature
         max_tokens = max_tokens if max_tokens is not None else self.max_tokens
         
         # Choose the appropriate model
         model = self.text_generation_model if use_text_generation_model else self.model
-        
+
+        logger.info(f"Using model {model}")
         try:
             if use_text_generation_model:
                 response = self.client.chat.completions.create(
                     model=model,
                     messages=messages,
                     temperature=temperature,
-                    max_tokens=max_tokens,
                 )
             else:
                 response = self.client.chat.completions.create(

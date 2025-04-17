@@ -112,9 +112,11 @@ class ArticlePipeline:
         
         # Analyze trends
         trends = self.trend_analyzer.analyze_trends(research_topic or "current trends")
+        logger.info(f"Trends: {trends}")
         
         # Research competitors
         competitors = self.trend_analyzer.research_competitors(research_topic or "current trends")
+        logger.info(f"Competitors: {competitors}")
         
         # Use the provided num_ideas or get from environment
         # Make sure we respect the value in .env file
@@ -558,6 +560,10 @@ class ArticlePipeline:
             
             # Perform web search
             search_results = self.web_search.search(query=search_query, max_results=2, include_raw_content=True)
+            
+            # Loop through search results and summarize the content
+            for result in search_results['results']:
+                result['summary'] = self.web_search.summarize_content(result['raw_content'], self.llm_client)
             
             # Save search results to project directory
             search_results_file = project_dir / "search_results.json"

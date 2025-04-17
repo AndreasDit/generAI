@@ -634,6 +634,25 @@ class ArticlePipeline:
             logger.error(f"Error assembling article: {e}")
             return {}
     
+    def suggest_images(self, project_id: str) -> Dict[str, Any]:
+        """Suggest images for a project.
+        
+        Args:
+            project_id: ID of the project
+            
+        Returns:
+            Dictionary containing the image suggestions or empty dict if failed
+        """
+        logger.info(f"Generating image suggestions for project: {project_id}")
+        
+        try:
+            image_suggestions = self.content_generator.generate_image_suggestions(project_id)
+            return image_suggestions
+            
+        except Exception as e:
+            logger.error(f"Error generating image suggestions: {e}")
+            return {}
+    
     def refine_article(self, project_id: str) -> Dict[str, Any]:
         """Refine an article for a project.
         
@@ -859,6 +878,11 @@ class ArticlePipeline:
                 if not refined_article:
                     logger.error(f"Failed to refine article for project {project_id}")
                     return None
+                
+                # Generate image suggestions
+                image_suggestions = self.content_generator.generate_image_suggestions(project_id)
+                if not image_suggestions:
+                    logger.warning(f"Failed to generate image suggestions for project {project_id}, but continuing")
                 
                 final_article = refined_article
                 # # Optimize SEO

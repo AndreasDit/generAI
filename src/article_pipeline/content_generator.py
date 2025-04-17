@@ -1,6 +1,7 @@
 """Content generator for article generation."""
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -21,6 +22,125 @@ class ContentGenerator:
         """
         self.llm_client = openai_client
         self.projects_dir = projects_dir
+    
+    def generate_image_suggestions(self, project_id: str) -> Dict[str, Any]:
+        """Generate image suggestions for a refined article.
+        
+        Args:
+            project_id: ID of the project to generate image suggestions for
+            
+        Returns:
+            Dictionary containing the image suggestions
+        """
+        logger.info(f"Generating image suggestions for project: {project_id}")
+        
+        # Get project data
+        project_dir = self.projects_dir / project_id
+        if not project_dir.exists():
+            logger.error(f"Project not found: {project_id}")
+            return {}
+        
+        refined_article_file = project_dir / "refined_article.md"
+        if not refined_article_file.exists():
+            logger.error(f"Refined article not found for project: {project_id}")
+            return {}
+        
+        with open(refined_article_file) as f:
+            article_content = f.read()
+            
+        # Load idea data to provide more context to the LLM
+        idea_file = project_dir / "idea.json"
+        
+        idea_data = {}
+        
+        if idea_file.exists():
+            try:
+                with open(idea_file) as f:
+                    idea_data = json.load(f)
+                logger.info(f"Loaded idea data for project: {project_id}")
+            except Exception as e:
+                logger.error(f"Error loading idea data: {e}")
+        else:
+            logger.warning(f"Idea file not found for project: {project_id}")
+                    
+        # Generate image suggestions using LLM
+        system_prompt = (
+            "You are an expert visual content strategist who suggests optimal image placements for articles. "
+            "Your task is to analyze an article and suggest strategic locations where images would enhance "
+            "the reader's understanding, engagement, and overall experience."
+        )
+        
+        # Prepare idea context for the prompt
+        idea_context = ""
+        if idea_data:
+            idea_context = f"""ARTICLE IDEA:
+        Title: {idea_data.get('title', 'No title')}
+        Description: {idea_data.get('description', 'No description')}
+        Target Audience: {idea_data.get('target_audience', 'General audience')}
+        Key Points: {', '.join(idea_data.get('key_points', []))}
+        Value Proposition: {idea_data.get('value_proposition', 'No value proposition')}
+        """
+        
+        user_prompt = f"""Analyze the following article and suggest 3-5 strategic locations where images would enhance the content:
+
+        This is the article idea:
+        {idea_context}        
+                
+        This is the article content:
+        {article_content}
+                
+        For each suggested image:
+        1. Identify the exact location in the article where the image should be placed (after which paragraph or section)
+        2. Describe what the image should contain in detail
+        3. Explain why this image would enhance the reader's experience at this location
+        4. Suggest an appropriate caption for the image
+        
+        Format your response as a JSON array of image suggestions, where each suggestion is an object with these properties:
+        - location: Description of where in the article the image should be placed
+        - description: Detailed description of what the image should contain
+        - rationale: Explanation of why this image enhances the content
+        - caption: Suggested caption for the image
+        
+        Return ONLY the JSON array, nothing else.
+        """
+        
+        try:
+            response = self.llm_client.chat_completion(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1500
+            )
+                        
+            # Parse the image suggestions
+            try:
+                # Write the response to a file
+                with open(project_dir / "image_suggestions.json", "w") as f:
+                    f.write(response)
+
+                # Update project metadata
+                metadata_file = project_dir / "metadata.json"
+                with open(metadata_file) as f:
+                    metadata = json.load(f)
+                
+                metadata["has_image_suggestions"] = True
+                metadata["updated_at"] = datetime.now().isoformat()
+                
+                with open(metadata_file, "w") as f:
+                    json.dump(metadata, f, indent=2)
+                
+                logger.info(f"Generated image suggestions for project: {project_id}")
+                return True
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parsing image suggestions: {e}")
+                return {"error": "Failed to parse image suggestions"}
+                
+        except Exception as e:
+            logger.error(f"Error generating image suggestions: {e}")
+            return {"error": str(e)}
     
     def generate_outline(self, project_id: str) -> Dict[str, Any]:
         """Generate an outline for a project.

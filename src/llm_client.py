@@ -71,12 +71,18 @@ class OpenAIClient(LLMClient):
         model = self.text_generation_model if use_text_generation_model else self.model
         
         try:
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            if use_text_generation_model:
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            else:
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                )
             
             # Log token usage if available
             if hasattr(response, 'usage'):

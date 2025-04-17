@@ -319,3 +319,4 @@ class ArticleAssembler:
         except Exception as e:
             logger.error(f"Error refining article: {e}")
             return {}
+    

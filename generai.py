@@ -153,6 +153,9 @@ def setup_argparse() -> argparse.ArgumentParser:
     
     modular_parser.add_argument("--optimize-seo", action="store_true",
                         help="Optimize the article for SEO for the current project")
+    modular_parser.add_argument("--suggest-images", action="store_true",
+                        help="Generate image suggestions for the current project")
+    
     
     # Medium publishing options for modular mode
     modular_parser.add_argument("--publish-to-medium", action="store_true",
@@ -394,6 +397,14 @@ def run_modular_mode(args, config):
                 print(f"Content length: {len(result)} characters")
         else:
             print("Failed to process article.")
+            
+    if args.suggest_images:
+        if not args.project_id:
+            print("Error: --project-id is required for suggesting images.")
+            return
+        image_suggestions = pipeline.suggest_images(args.project_id)
+        print(f"Image suggestions for project {args.project_id}:")
+        print(json.dumps(image_suggestions, indent=2))
 
 
 def publish_to_medium(config, article, args) -> Dict[str, Any]:

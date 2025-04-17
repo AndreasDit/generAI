@@ -80,6 +80,7 @@ class IdeaGenerator:
             if "popular_formats" in trend_analysis:
                 trend_analysis_text += "\nPopular Formats:\n"
                 trend_analysis_text += trend_analysis["popular_formats"] + "\n"
+        logger.info(f"Trend analysis: {trend_analysis}")
         
         # Include competitor research in the prompt if available
         competitor_research_text = ""
@@ -105,6 +106,7 @@ class IdeaGenerator:
             if "differentiation_opportunities" in competitor_research:
                 competitor_research_text += "\nDifferentiation Opportunities:\n"
                 competitor_research_text += competitor_research["differentiation_opportunities"] + "\n"
+        logger.info(f"Competitor research: {competitor_research}")
         
         user_prompt = f"""Generate {num_ideas} unique article ideas related to '{research_topic}'.{trend_analysis_text}{competitor_research_text}
         

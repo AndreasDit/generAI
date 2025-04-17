@@ -143,6 +143,7 @@ class TrendAnalyzer:
         
         user_prompt = f"""Analyze the following trending content related to '{research_topic}' and identify key patterns and opportunities:
         
+        Here is the content for analysis:
         {json.dumps(content_for_analysis, indent=2)}
         
         Provide your analysis in the following format:
@@ -261,6 +262,7 @@ class TrendAnalyzer:
         
         user_prompt = f"""Analyze the following competitor content related to '{research_topic}' and identify key insights:
         
+        Here is the content for analysis:
         {json.dumps(content_for_analysis, indent=2)}
         
         Provide your analysis in the following format:

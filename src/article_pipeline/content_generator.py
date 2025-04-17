@@ -94,6 +94,9 @@ class ContentGenerator:
         """
         
         try:
+            # Log model and token usage info
+            token_count = len(user_prompt + system_prompt)
+            logger.info(f"Using model {self.llm_client.model} for outline generation. Input tokens: {token_count}")
             response = self.llm_client.chat_completion(
                 messages=[
                     {"role": "system", "content": system_prompt},

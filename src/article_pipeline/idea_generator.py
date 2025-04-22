@@ -313,6 +313,7 @@ class IdeaGenerator:
         logger.info(f"Write idea to {idea_file}")
         with open(idea_file, "w") as f:
             json.dump(idea, f, indent=2)
+        logger.info(f"Idea saved with ID {idea_id} to file {idea_file}")
         
         return idea_id
     

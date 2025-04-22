@@ -205,7 +205,7 @@ class ArticlePipeline:
                 idea_file = ideas_dir / f"{idea_id}.json"
                 with open(idea_file, "w") as f:
                     json.dump(idea, f, indent=2)
-                logger.info(f"Saved idea {idea_id} to file {idea_file}")
+                logger.info(f"Saved idea {idea_id} to file {idea_file} within path { os.getcwd()}")
             
             logger.info(f"Generated {len(ideas)} article ideas")
             return ideas

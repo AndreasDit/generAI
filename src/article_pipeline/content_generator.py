@@ -100,6 +100,7 @@ class ContentGenerator:
         - description: Detailed description of what the image should contain
         - rationale: Explanation of why this image enhances the content
         - caption: Suggested caption for the image
+        - prompt: Prompt like a senior prompt engineer that creates this graphic
         
         Return ONLY the JSON array, nothing else.
         """

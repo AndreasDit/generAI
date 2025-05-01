@@ -276,6 +276,8 @@ class ArticlePipeline:
         3. Potential for engagement
         4. Alignment with trends
         
+        Account for Originality. Also value personal experience, since it gets people engaged.
+        
         Format your response as a JSON object with:
         - selected_idea_index: Index of the selected idea (0-based)
         - reasoning: Explanation of the selection

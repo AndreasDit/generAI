@@ -125,11 +125,14 @@ class ArticlePipeline:
         
         # Generate ideas using LLM
         system_prompt = (
-            "You are an expert content strategist who generates article ideas. "
+            "You are an expert content strategist who generates article ideas for the platform Madium.com. "
             "Your ideas should be unique, valuable, and based on trend analysis."
         )
         
         user_prompt = f"""Generate article ideas based on the following research:
+
+        Research Topic:
+        {research_topic}
 
         Trend Analysis:
         {json.dumps(trends, indent=2)}
@@ -196,6 +199,14 @@ class ArticlePipeline:
                 # Fallback: create simple idea objects
                 ideas = [{'title': f"Idea {i+1}", 'description': idea_text.strip()} 
                          for i, idea_text in enumerate(response.split('\n\n')) if idea_text.strip()]
+            
+            # Add research topic to idea
+            for idea in ideas:
+                idea["research_topic"] = research_topic
+            
+            # Add timestamp to idea
+            for idea in ideas:
+                idea["timestamp"] = datetime.now().strftime('%Y%m%d%H%M%S')
             
             # Save ideas
             ideas_dir = self.data_dir / "ideas"

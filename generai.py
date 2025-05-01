@@ -29,6 +29,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import json
+import random
 
 from loguru import logger
 
@@ -254,7 +255,9 @@ def run_modular_mode(args, config):
     )
     
     # Get default research topic from config
-    default_topic = config.get("research", {}).get("default_topic", "artificial intelligence")
+    default_topics = config.get("research", {}).get("default_topics", "artificial intelligence")
+    default_topic = random.choice(default_topics)
+    logger.info(f"Default topic: {default_topic} chosen from topics {default_topics}")
     
     # Execute requested pipeline steps
     if args.analyze_trends:

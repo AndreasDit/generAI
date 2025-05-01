@@ -12,6 +12,7 @@ A modular article generation pipeline that supports multiple LLM providers (Open
 - Feedback analysis
 - Web search integration (Brave and Tavily)
 - Medium publishing integration
+- Image Suggestions: Provides creative visual prompts for enhancing articles with relevant imagery, including infographics and illustrations.
 
 ## Installation
 
@@ -105,10 +106,23 @@ python generai.py modular --assemble-article --project-id <project_id>
 python generai.py modular --refine-article --project-id <project_id>
 ```
 
-8. Optimize for SEO:
+### SEO Optimization and Hashtag Generation
+
+The GenerAI pipeline includes a robust SEO optimization feature that analyzes content for search engine visibility and suggests improvements. Additionally, it generates relevant hashtags to enhance article reach and engagement. These hashtags are now written to a file for easy access and integration into your content strategy.
+
+To utilize these features, run the following commands:
+
+- Optimize for SEO:
 ```bash
 python generai.py modular --optimize-seo --project-id <project_id>
 ```
+
+- Generate Hashtags:
+```bash
+python generai.py modular --generate-hashtags --project-id <project_id>
+```
+
+The generated hashtags will be saved in the `hashtags.txt` file within your project directory.
 
 9. Analyze feedback:
 ```bash

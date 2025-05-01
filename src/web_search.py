@@ -218,6 +218,37 @@ class BraveSearchManager(SearchProvider):
         # Use the general search method with the news-focused query
         return self.search(query=query, search_depth="basic", max_results=max_results)
     
+    def extract_content_from_search_results(self, search_results: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract and process content from search results.
+        
+        Args:
+            search_results: Dictionary containing search results from Tavily API
+            
+        Returns:
+            List of dictionaries containing processed content from search results
+        """
+        extracted_contents = []
+        
+        if "results" in search_results:
+            # Extract URLs from search results
+            urls = [result.get("url", "") for result in search_results["results"] if result.get("url", "")]
+            if urls:
+                extracted_contents_list = self.extract_content_from_url(urls)
+                
+                # Process extracted contents
+                for i, result in enumerate(search_results["results"]):
+                    url = result.get("url", "")
+                    if url and i < len(extracted_contents_list) and extracted_contents_list[i]["success"]:
+                        extracted_contents.append({
+                            "title": result.get("title", extracted_contents_list[i].get("title", "")),
+                            "url": url,
+                            "content": extracted_contents_list[i].get("content", ""),
+                            "source": result.get("source", ""),
+                            "date": result.get("date", "")
+                        })
+        
+        return extracted_contents
+
     def get_topic_insights(self, topic: str) -> Dict[str, Any]:
         """Get comprehensive insights about a topic from the web.
         
@@ -373,6 +404,37 @@ class TavilySearchManager(SearchProvider):
         # Use the general search method with the news-focused query
         return self.search(query=query, search_depth="basic", max_results=max_results)
     
+    def extract_content_from_search_results(self, search_results: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract and process content from search results.
+        
+        Args:
+            search_results: Dictionary containing search results from Tavily API
+            
+        Returns:
+            List of dictionaries containing processed content from search results
+        """
+        extracted_contents = []
+        
+        if "results" in search_results:
+            # Extract URLs from search results
+            urls = [result.get("url", "") for result in search_results["results"] if result.get("url", "")]
+            if urls:
+                extracted_contents_list = self.extract_content_from_url(urls)
+                
+                # Process extracted contents
+                for i, result in enumerate(search_results["results"]):
+                    url = result.get("url", "")
+                    if url and i < len(extracted_contents_list) and extracted_contents_list[i]["success"]:
+                        extracted_contents.append({
+                            "title": result.get("title", extracted_contents_list[i].get("title", "")),
+                            "url": url,
+                            "content": extracted_contents_list[i].get("content", ""),
+                            "source": result.get("source", ""),
+                            "date": result.get("date", "")
+                        })
+        
+        return extracted_contents
+
     def get_topic_insights(self, topic: str) -> Dict[str, Any]:
         """Get comprehensive insights about a topic from the web.
         

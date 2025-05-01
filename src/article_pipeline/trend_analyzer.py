@@ -24,61 +24,7 @@ class TrendAnalyzer:
         self.llm_client = openai_client
         self.web_search = web_search
     
-    def transform_search_term(self, research_topic: str) -> str:
-        """Transform a research topic into an effective search term.
-        
-        Args:
-            research_topic: The original research topic
-            
-        Returns:
-            A transformed search term optimized for web search
-        """
-        logger.info(f"Transforming search term for topic: {research_topic}")
-        
-        system_prompt = (
-            "You are an expert web researcher who creates effective search terms. "
-            "Your task is to transform a general topic into a specific, targeted search term "
-            "that will yield relevant and high-quality search results."
-        )
-        
-        user_prompt = f"""Transform the following research topic into an effective search term:
 
-        TOPIC: {research_topic}
-        
-        Guidelines:
-        1. Make the search term more specific and targeted
-        2. Include relevant keywords that will help find high-quality content
-        3. Keep the search term concise (5-10 words maximum)
-        4. Focus on the most important aspects of the topic
-        5. Avoid overly broad or vague terms
-        
-        Provide ONLY the transformed search term without any explanation or additional text.
-        """
-        
-        try:
-            response = self.llm_client.chat_completion(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.7,
-                max_tokens=100
-            )
-            
-            # Clean up the response to get just the search term
-            search_term = response.strip()
-            
-            # Add the current year to focus on recent results
-            current_year = datetime.now().year
-            search_term = f"{search_term} Focus on results from the year {current_year}"
-            
-            logger.info(f"Transformed search term with year: {search_term}")
-            return search_term
-            
-        except Exception as e:
-            logger.error(f"Error transforming search term: {e}")
-            # Return the original topic if transformation fails
-            return research_topic
     
     def analyze_trends(self, research_topic: str) -> Dict[str, Any]:
         """Analyze trends for a research topic.
@@ -92,16 +38,16 @@ class TrendAnalyzer:
         logger.info(f"Analyzing trends for topic: {research_topic}")
         
         # Transform the research topic into an effective search term
-        # search_term = self.transform_search_term(research_topic)
-        # logger.info(f"Using transformed search term: {search_term}")
+        search_term = self.llm_client.transform_search_term(research_topic)
         
         # Search for trending content using the transformed search term
-        search_results = self.web_search.search(research_topic)
+        search_results = self.web_search.search(search_term)
+
+        # Extract full content from search results
+        extracted_contents = self.web_search.extract_content_from_search_results(search_results)
         
         # Extract relevant information from search results
         trends = []
-        extracted_contents = []
-        
         if "results" in search_results:
             # Add basic information to trends list
             for result in search_results["results"]:
@@ -112,26 +58,7 @@ class TrendAnalyzer:
                     "source": result.get("source", ""),
                     "date": result.get("date", "")
                 })
-            
-            # Extract full content from all URLs in a single batch
-            urls = [result.get("url", "") for result in search_results["results"] if result.get("url", "")]
-            logger.info(f"Extracting content from URLs: {urls}")
-            if urls:
-                extracted_contents_list = self.web_search.extract_content_from_url(urls)
-                # logger.info(f"Extracted contents: {extracted_contents_list}")  # Add this line for debugging inf
                 
-                # Process extracted contents
-                for i, result in enumerate(search_results["results"]):
-                    url = result.get("url", "")
-                    if url and i < len(extracted_contents_list) and extracted_contents_list[i]["success"]:
-                        extracted_contents.append({
-                            "title": result.get("title", extracted_contents_list[i].get("title", "")),
-                            "url": url,
-                            "content": extracted_contents_list[i].get("content", ""),
-                            "source": result.get("source", ""),
-                            "date": result.get("date", "")
-                        })
-        
         # Analyze trends using LLM with extracted content
         system_prompt = (
             "You are an expert content strategist who analyzes trends in content. "
@@ -213,16 +140,16 @@ class TrendAnalyzer:
         logger.info(f"Researching competitors for topic: {research_topic}")
         
         # Transform the research topic into an effective search term
-        # search_term = self.transform_search_term(research_topic)
-        # logger.info(f"Using transformed search term for competitor research: {search_term}")
+        search_term = self.llm_client.transform_search_term(research_topic)
+        logger.info(f"Using transformed search term for competitor research: {search_term}")
         
         # Search for competitor content using the transformed search term
-        search_results = self.web_search.get_competitor_content(research_topic)
+        search_results = self.web_search.get_competitor_content(search_term)
+
+        # Initialize lists for competitors
+        competitors = []
         
         # Extract relevant information from search results
-        competitors = []
-        extracted_contents = []
-        
         if "results" in search_results:
             # Add basic information to competitors list
             for result in search_results["results"]:
@@ -233,23 +160,9 @@ class TrendAnalyzer:
                     "source": result.get("source", ""),
                     "date": result.get("date", "")
                 })
-            
-            # Extract full content from all URLs in a single batch
-            urls = [result.get("url", "") for result in search_results["results"] if result.get("url", "")]
-            if urls:
-                extracted_contents_list = self.web_search.extract_content_from_url(urls)
-                
-                # Process extracted contents
-                for i, result in enumerate(search_results["results"]):
-                    url = result.get("url", "")
-                    if url and i < len(extracted_contents_list) and extracted_contents_list[i]["success"]:
-                        extracted_contents.append({
-                            "title": result.get("title", extracted_contents_list[i].get("title", "")),
-                            "url": url,
-                            "content": extracted_contents_list[i].get("content", ""),
-                            "source": result.get("source", ""),
-                            "date": result.get("date", "")
-                        })
+        
+        # Extract full content from search results
+        extracted_contents = self.web_search.extract_content_from_search_results(search_results)
         
         # Analyze competitors using LLM with extracted content
         system_prompt = (

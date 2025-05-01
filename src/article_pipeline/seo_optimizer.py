@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from datetime import datetime
 
 from loguru import logger
 
@@ -39,13 +40,22 @@ class SEOOptimizer:
             logger.error(f"Project not found: {project_id} in {project_dir}")
             return {}
         
-        article_file = project_dir / "article.json"
+        article_file = project_dir / "refined_article.md"
         if not article_file.exists():
             logger.error(f"Project article not found: {project_id} under {article_file}")
             return {}
-        
+
+        idea_file = project_dir / "idea.json"
+        if not idea_file.exists():
+            logger.error(f"Project article not found: {project_id} under {idea_file}")
+            return {}
+
+        # Load files
         with open(article_file) as f:
-            article = json.load(f)
+            article_content = f.read()
+
+        with open(idea_file) as f:
+            idea = json.load(f)
         
         # Optimize article using LLM
         system_prompt = (
@@ -53,19 +63,21 @@ class SEOOptimizer:
             "Your task is to enhance the article's SEO while maintaining readability."
         )
         
-        user_prompt = f"""Optimize the following article for SEO:
+        user_prompt = f"""
+        Assume the role of an SEO specialist focused on optimizing Medium articles for search engines.
+        Your task is to develop a comprehensive strategy for enhancing the SEO of posts about {idea.get('title', '') + ' ' + idea.get('description', '')}.
+        Start by conducting keyword research to identify high-volume and long-tail keywords relevant to your topic.
+        Incorporate these keywords naturally throughout the article, especially in key areas like the title, headings, subheadings, and the first paragraph.
+        Ensure the content provides value and answers common questions associated with the keywords, which can improve the chances of appearing in featured snippets and voice search results.
+        
+        Optimize the following article for SEO:
 
-        {article['content']}
-        
-        The optimized article should:
-        1. Include relevant keywords naturally
-        2. Have optimized headings and subheadings
-        3. Maintain readability and flow
-        4. Include meta description and title suggestions
-        5. Have proper internal linking structure
-        
+        {article_content}
+                
         Format the optimized article with clear section headings and paragraphs.
-        Also provide SEO metadata suggestions.
+        Try to integrate the key words naturally without perform rewrite.
+        Try to add the most relevant key words, but ensure the article remains mostly as it is, without making significant changes.
+        Provide ONLY the optimized article content without any explanation or additional text.
         """
         
         try:
@@ -76,54 +88,34 @@ class SEOOptimizer:
                 ],
                 temperature=0.7,
                 max_tokens=2000,
-                use_text_generation_model=True
+                use_text_generation_model=False
             )
             
-            # Parse SEO metadata and content
-            seo_data = {}
-            content = []
-            metadata = []
-            current_section = "content"
+            # Update the article with refined content
+            logger.info(f"Optimizing article for project: {project_id}")
+            seo_optimized_article = response.strip()
             
-            for line in response.split("\n"):
-                line = line.strip()
-                if not line:
-                    continue
-                
-                if line.startswith("SEO METADATA:"):
-                    current_section = "metadata"
-                    continue
-                
-                if current_section == "content":
-                    content.append(line)
-                else:
-                    metadata.append(line)
-            
-            seo_data["content"] = "\n".join(content)
-            seo_data["metadata"] = "\n".join(metadata)
-            seo_data["original_content"] = article["content"]
-            
-            # Include the title from the refined article
-            seo_data["title"] = article.get("title", "")
-            
-            # Save the optimized article
-            optimized_file = project_dir / "optimized_article.json"
-            with open(optimized_file, "w") as f:
-                json.dump(seo_data, f, indent=2)
+            # Save the refined article
+            logger.info(f"Optimizing article for project: {project_id}")
+            seo_optimized_article_file = project_dir / "seo_optimized_article.md"
+            with open(seo_optimized_article_file, "w") as f:
+                f.write(seo_optimized_article)
+            logger.info(f"Optimized article for project: {project_id}")
             
             # Update project metadata
+            logger.info(f"Optimizing article for project: {project_id}")
             metadata_file = project_dir / "metadata.json"
             with open(metadata_file) as f:
                 metadata = json.load(f)
             
             metadata["status"] = "article_optimized"
-            metadata["updated_at"] = article.get("created_at", "")
+            metadata["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
             with open(metadata_file, "w") as f:
                 json.dump(metadata, f, indent=2)
             
             logger.info(f"Optimized article for project: {project_id}")
-            return seo_data
+            return seo_optimized_article
             
         except Exception as e:
             logger.error(f"Error optimizing article: {e}")

@@ -8,12 +8,12 @@ from typing import Dict, Any, List, Optional
 from loguru import logger
 
 from src.llm_client import LLMClient
-
+from src.web_search import TavilySearchManager
 
 class ContentGenerator:
     """Generates content for articles."""
     
-    def __init__(self, openai_client: LLMClient, projects_dir: Path):
+    def __init__(self, openai_client: LLMClient, projects_dir: Path, web_search: TavilySearchManager):
         """Initialize the content generator.
         
         Args:
@@ -22,6 +22,7 @@ class ContentGenerator:
         """
         self.llm_client = openai_client
         self.projects_dir = projects_dir
+        self.web_search = web_search
     
     def generate_image_suggestions(self, project_id: str) -> Dict[str, Any]:
         """Generate image suggestions for a refined article.
@@ -100,6 +101,7 @@ class ContentGenerator:
         - description: Detailed description of what the image should contain
         - rationale: Explanation of why this image enhances the content
         - caption: Suggested caption for the image
+        - prompt: Prompt like a senior prompt engineer that creates this graphic
         
         Return ONLY the JSON array, nothing else.
         """
@@ -327,7 +329,15 @@ class ContentGenerator:
         
         # Generate introduction
         if "introduction" in outline:
-            user_prompt = f"""Write an engaging introduction for an article about '{outline.get('introduction', '')}'.
+            user_prompt = f"""
+            Assume the role of a seasoned writer specializing in captivating introductions for Medium articles.
+
+            Write an engaging introduction for an article about '{outline.get('introduction', '')}'.
+            The introduction should hook the reader immediately, setting the tone and context of the article while intriguing them to continue reading.
+            Start with a compelling hook—this could be a provocative question, a surprising fact, a vivid anecdote, or a powerful quote.
+            Briefly outline the main points that will be covered in the article, establishing your credibility on the subject.
+            Make sure the introduction aligns with the overall tone and style of the article, whether it's formal, conversational, or humorous.
+            Include a transition at the end of the introduction that seamlessly leads into the main body of the article, ensuring a smooth reader experience.
 
             The introduction should:
             1. Hook the reader's attention
@@ -362,8 +372,20 @@ class ContentGenerator:
             
             if isinstance(section_data, list):
                 for subsection in section_data:
-                    user_prompt = f"""Write a detailed paragraph for the section '{subsection.get('title', '')}' with the following description:
-                    {subsection.get('description', '')}
+                    title = subsection.get("title", "")
+                    description = subsection.get("description", "")
+                    
+                    # Transform the research topic into an effective search term
+                    topic = title + " " + description
+                    search_term = self.llm_client.transform_search_term(topic)
+                    search_results = self.web_search.search(search_term, max_results=2)
+                    extracted_contents = self.web_search.extract_content_from_search_results(search_results)
+                    
+                    user_prompt = f"""Write a detailed paragraph for the section '{title}' with the following description:
+                    {description}
+                    
+                    Addidional information and research:
+                    {extracted_contents}
                     
                     The paragraph should:
                     1. Be informative and engaging

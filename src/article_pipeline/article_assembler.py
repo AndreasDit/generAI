@@ -219,7 +219,7 @@ class ArticleAssembler:
                     
         # Refine article using LLM
         system_prompt = (
-            "You are an expert editor who refines and polishes articles. "
+            "You are a successful Medium writer, specialized in AI content writing. You’re writing for an audience of content marketers and writers who are considering whether they should implement AI in their writing process. Also entrepreneurs who want to use AI to generate passive income. You write genuine, relatable, and personal stories about how you’ve adopted AI. Your sentences are concise, short, and easy to understand, hooking the average Medium reader"
             "Your task is to improve the article's clarity, flow, and impact while ensuring "
             "it aligns with the original article idea and follows the intended structure."
         )
@@ -279,8 +279,11 @@ class ArticleAssembler:
 
         Remember, the goal is to make the text sound natural, engaging, and as if it were written by a human rather than an AI.
         
+        Personalize the headline, for example use How I Did instead if How To. Other examples are The lesson I learned, The mistake I made, Advice you’d give to your past-self, I wish I had known this sooner.
+        
         Format the article with clear section headings and paragraphs.
         Use the content as the primary input to create a cohesive and well-structured article. Use the article idea as context to ensure the article aligns with the original idea.
+        Return the article as a markdown file. return ONLY the article content. Do NOT write a json file. Instead write a normal readable article. Use markdown formatting.
         """
         
         try:

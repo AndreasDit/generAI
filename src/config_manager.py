@@ -55,7 +55,7 @@ class ConfigManager:
                 "min_articles_for_insights": int(os.getenv("FEEDBACK_MIN_ARTICLES", "3")),
             },
             "research": {
-                "default_topic": os.getenv("RESEARCH_DEFAULT_TOPIC", "artificial intelligence"),
+                "default_topics": os.getenv("RESEARCH_DEFAULT_TOPICS", "artificial intelligence").split(","),
                 "num_ideas": int(os.getenv("RESEARCH_NUM_IDEAS", "5")),
                 "max_ideas": int(os.getenv("RESEARCH_MAX_IDEAS", "10")),
             }

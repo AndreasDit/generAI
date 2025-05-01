@@ -29,11 +29,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import json
+import random
 
 from loguru import logger
 
 from src.config_manager import ConfigManager
-from src.llm_client import create_llm_client
+from src.llm_client import LLMClient, create_llm_client
 from src.medium_publisher import MediumPublisher
 from src.utils import setup_logging, parse_outline
 
@@ -133,6 +134,11 @@ def setup_argparse() -> argparse.ArgumentParser:
                         help="Evaluate existing ideas and select the best one")
     modular_parser.add_argument("--max-ideas", type=int, default=10,
                         help="Maximum number of ideas to evaluate")
+    modular_parser.add_argument("--generate-tweets", action="store_true",
+                        help="Generate tweets for an article idea")
+    modular_parser.add_argument("--idea-id", type=str,
+                        help="ID of the idea to generate tweets for (optional)")
+    
     
     modular_parser.add_argument("--create-project", action="store_true",
                         help="Create a project for the next article in the queue")
@@ -155,7 +161,8 @@ def setup_argparse() -> argparse.ArgumentParser:
                         help="Optimize the article for SEO for the current project")
     modular_parser.add_argument("--suggest-images", action="store_true",
                         help="Generate image suggestions for the current project")
-    
+    modular_parser.add_argument("--suggest-hashtags", action="store_true",
+                        help="Generate hashtag suggestions for the current project")
     
     # Medium publishing options for modular mode
     modular_parser.add_argument("--publish-to-medium", action="store_true",
@@ -236,8 +243,83 @@ def run_simple_mode(args, config):
         publish_to_medium(config, article, args)
 
 
+def suggest_hashtags(llm_client: LLMClient, project_id: str, data_dir: Path) -> List[str]:
+    """Generate hashtag suggestions for the article based on its title and description.
+    
+    Args:
+        llm_client: LLM client for API interactions
+        project_id: ID of the project to generate hashtags for
+        data_dir: Directory containing project data
+        
+    Returns:
+        List of suggested hashtags
+    """
+    # Load idea.json from the project directory
+    idea_file = data_dir / "projects" / project_id / "idea.json"
+    if not idea_file.exists():
+        logger.error(f"idea.json not found for project {project_id}")
+        return []
+        
+    with open(idea_file) as f:
+        idea = json.load(f)
+        
+    # Extract title and description
+    title = idea.get("title", "")
+    description = idea.get("description", "")
+    
+    # Generate hashtags using LLM
+    system_prompt = "You are a social media expert who creates engaging hashtags for Medium articles."
+    
+    user_prompt = f"""Generate 5 relevant hashtags for a Medium article with the following details:
+    
+    Title: {title}
+    Description: {description}
+    
+    Requirements:
+    1. Make hashtags relevant to the article's topic and target audience
+    2. Include a mix of popular and niche hashtags
+    3. Ensure hashtags are commonly used on Medium
+    4. Format each hashtag with # prefix
+    5. Do not include spaces in hashtags
+    
+    Return only the hashtags as a comma-separated list.
+    """
+    
+    try:
+        response = llm_client.chat_completion(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=100
+        )
+        
+        # Clean and format hashtags
+        hashtags = [tag.strip() for tag in response.split(",")]
+        hashtags = [tag if tag.startswith("#") else f"#{tag}" for tag in hashtags]
+        
+        # Write hashtags to a file
+        hashtags_file_path = data_dir / "projects" / project_id / "hashtags.txt"
+        try:
+            with open(hashtags_file_path, "w") as f:
+                f.write("\n".join(hashtags[:5]))
+        except Exception as e:
+            logger.error(f"Error writing hashtags to file: {e}")
+        
+        return hashtags[:5]  # Ensure we return exactly 5 hashtags
+        
+    except Exception as e:
+        logger.error(f"Error generating hashtags: {e}")
+        return []
+
 def run_modular_mode(args, config):
-    """Run the article generation pipeline in modular mode."""
+    """Run the modular pipeline mode.
+    
+    Args:
+        args: Command line arguments
+        config: Application configuration
+    """
     # Check if OpenAI API key is available
     api_key = args.openai_api_key or config["openai"]["api_key"]
     if not api_key:
@@ -245,7 +327,7 @@ def run_modular_mode(args, config):
         return
     
     # Initialize LLM client
-    llm_client = create_llm_client()
+    llm_client = create_llm_client(config)
     
     # Initialize the pipeline
     pipeline = ArticlePipeline(
@@ -254,7 +336,9 @@ def run_modular_mode(args, config):
     )
     
     # Get default research topic from config
-    default_topic = config.get("research", {}).get("default_topic", "artificial intelligence")
+    default_topics = config.get("research", {}).get("default_topics", "artificial intelligence")
+    default_topic = random.choice(default_topics)
+    logger.info(f"Default topic: {default_topic} chosen from topics {default_topics}")
     
     # Execute requested pipeline steps
     if args.analyze_trends:
@@ -286,6 +370,25 @@ def run_modular_mode(args, config):
             print(f"Selected idea: {selected_idea}")
         else:
             print("No suitable idea selected.")
+            
+    if args.generate_tweets:
+        # Initialize tweet generator
+        tweet_generator = TweetGenerator(llm_client=pipeline.llm_client, data_dir=pipeline.data_dir)
+        
+        # If idea_id is provided, load that specific idea
+        if args.idea_id:
+            idea_file = pipeline.data_dir / "ideas" / f"idea_{args.idea_id}.json"
+            if idea_file.exists():
+                with open(idea_file) as f:
+                    idea = json.load(f)
+                tweet_generator.generate_tweets_for_idea(idea)
+            else:
+                logger.error(f"Idea file not found: {idea_file}")
+        # Otherwise use the selected idea from evaluation
+        elif selected_idea:
+            tweet_generator.generate_tweets_for_idea(selected_idea)
+        else:
+            logger.error("No idea available for tweet generation. Please provide --idea-id or run --evaluate-ideas first.")
     
     if args.create_project:
         project_id = pipeline.create_project(project_id=args.project_id)
@@ -343,16 +446,7 @@ def run_modular_mode(args, config):
         if not args.project_id:
             print("Error: --project-id is required for optimizing SEO.")
             return
-        seo_article = pipeline.optimize_seo(args.project_id)
-        if seo_article and isinstance(seo_article, dict):
-            print(f"Optimized article for SEO (project {args.project_id}):")
-            print(f"Title: {seo_article.get('title', 'No title')}")
-            # Extract metadata for display
-            metadata = seo_article.get('metadata', '')
-            # Try to extract meta description and keywords from metadata if they exist
-            print(f"Metadata: {metadata[:100]}..." if metadata else "No metadata")
-        else:
-            print(f"Failed to optimize article for SEO (project {args.project_id}).")
+        pipeline.optimize_seo(args.project_id)
     
     if args.publish_to_medium:
         if not args.project_id:
@@ -405,6 +499,23 @@ def run_modular_mode(args, config):
         image_suggestions = pipeline.suggest_images(args.project_id)
         print(f"Image suggestions for project {args.project_id}:")
         print(json.dumps(image_suggestions, indent=2))
+
+    if args.suggest_hashtags:
+        if not args.project_id:
+            logger.error("Project ID is required for suggesting hashtags")
+            return
+            
+        # Initialize LLM client
+        llm_client = create_llm_client(config)
+        
+        # Generate hashtags
+        hashtags = suggest_hashtags(llm_client, args.project_id, Path(args.data_dir))
+        if hashtags:
+            print("\nSuggested hashtags for your Medium article:")
+            print(", ".join(hashtags))
+        else:
+            print("\nNo hashtags could be generated. Please check the project ID and try again.")
+        return
 
 
 def publish_to_medium(config, article, args) -> Dict[str, Any]:

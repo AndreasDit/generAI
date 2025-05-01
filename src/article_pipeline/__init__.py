@@ -695,6 +695,9 @@ class ArticlePipeline:
         """
         logger.info(f"Optimizing SEO for project: {project_id}")
         
+        optimized = self.seo_optimizer.optimize_article(project_id)
+        return optimized
+        
         try:
             optimized = self.seo_optimizer.optimize_article(project_id)
             return optimized

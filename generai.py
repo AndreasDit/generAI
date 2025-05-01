@@ -346,16 +346,7 @@ def run_modular_mode(args, config):
         if not args.project_id:
             print("Error: --project-id is required for optimizing SEO.")
             return
-        seo_article = pipeline.optimize_seo(args.project_id)
-        if seo_article and isinstance(seo_article, dict):
-            print(f"Optimized article for SEO (project {args.project_id}):")
-            print(f"Title: {seo_article.get('title', 'No title')}")
-            # Extract metadata for display
-            metadata = seo_article.get('metadata', '')
-            # Try to extract meta description and keywords from metadata if they exist
-            print(f"Metadata: {metadata[:100]}..." if metadata else "No metadata")
-        else:
-            print(f"Failed to optimize article for SEO (project {args.project_id}).")
+        pipeline.optimize_seo(args.project_id)
     
     if args.publish_to_medium:
         if not args.project_id:

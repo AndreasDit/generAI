@@ -220,13 +220,16 @@ class ClaudeClient(LLMClient):
             raise
 
 
-def create_llm_client() -> LLMClient:
+def create_llm_client(config=None) -> LLMClient:
     """Create an LLM client based on configuration.
+    
+    Args:
+        config: Optional configuration dictionary
     
     Returns:
         LLMClient instance
     """
-    provider = LLM_CONFIG["default_provider"]
+    provider = config.get('default_provider', LLM_CONFIG['default_provider']) if config else LLM_CONFIG['default_provider']
     
     if provider == "openai":
         return OpenAIClient()

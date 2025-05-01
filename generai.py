@@ -34,7 +34,7 @@ import random
 from loguru import logger
 
 from src.config_manager import ConfigManager
-from src.llm_client import create_llm_client
+from src.llm_client import LLMClient, create_llm_client
 from src.medium_publisher import MediumPublisher
 from src.utils import setup_logging, parse_outline
 
@@ -161,7 +161,8 @@ def setup_argparse() -> argparse.ArgumentParser:
                         help="Optimize the article for SEO for the current project")
     modular_parser.add_argument("--suggest-images", action="store_true",
                         help="Generate image suggestions for the current project")
-    
+    modular_parser.add_argument("--suggest-hashtags", action="store_true",
+                        help="Generate hashtag suggestions for the current project")
     
     # Medium publishing options for modular mode
     modular_parser.add_argument("--publish-to-medium", action="store_true",
@@ -242,8 +243,83 @@ def run_simple_mode(args, config):
         publish_to_medium(config, article, args)
 
 
+def suggest_hashtags(llm_client: LLMClient, project_id: str, data_dir: Path) -> List[str]:
+    """Generate hashtag suggestions for the article based on its title and description.
+    
+    Args:
+        llm_client: LLM client for API interactions
+        project_id: ID of the project to generate hashtags for
+        data_dir: Directory containing project data
+        
+    Returns:
+        List of suggested hashtags
+    """
+    # Load idea.json from the project directory
+    idea_file = data_dir / "projects" / project_id / "idea.json"
+    if not idea_file.exists():
+        logger.error(f"idea.json not found for project {project_id}")
+        return []
+        
+    with open(idea_file) as f:
+        idea = json.load(f)
+        
+    # Extract title and description
+    title = idea.get("title", "")
+    description = idea.get("description", "")
+    
+    # Generate hashtags using LLM
+    system_prompt = "You are a social media expert who creates engaging hashtags for Medium articles."
+    
+    user_prompt = f"""Generate 5 relevant hashtags for a Medium article with the following details:
+    
+    Title: {title}
+    Description: {description}
+    
+    Requirements:
+    1. Make hashtags relevant to the article's topic and target audience
+    2. Include a mix of popular and niche hashtags
+    3. Ensure hashtags are commonly used on Medium
+    4. Format each hashtag with # prefix
+    5. Do not include spaces in hashtags
+    
+    Return only the hashtags as a comma-separated list.
+    """
+    
+    try:
+        response = llm_client.chat_completion(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=100
+        )
+        
+        # Clean and format hashtags
+        hashtags = [tag.strip() for tag in response.split(",")]
+        hashtags = [tag if tag.startswith("#") else f"#{tag}" for tag in hashtags]
+        
+        # Write hashtags to a file
+        hashtags_file_path = data_dir / "projects" / project_id / "hashtags.txt"
+        try:
+            with open(hashtags_file_path, "w") as f:
+                f.write("\n".join(hashtags[:5]))
+        except Exception as e:
+            logger.error(f"Error writing hashtags to file: {e}")
+        
+        return hashtags[:5]  # Ensure we return exactly 5 hashtags
+        
+    except Exception as e:
+        logger.error(f"Error generating hashtags: {e}")
+        return []
+
 def run_modular_mode(args, config):
-    """Run the article generation pipeline in modular mode."""
+    """Run the modular pipeline mode.
+    
+    Args:
+        args: Command line arguments
+        config: Application configuration
+    """
     # Check if OpenAI API key is available
     api_key = args.openai_api_key or config["openai"]["api_key"]
     if not api_key:
@@ -251,7 +327,7 @@ def run_modular_mode(args, config):
         return
     
     # Initialize LLM client
-    llm_client = create_llm_client()
+    llm_client = create_llm_client(config)
     
     # Initialize the pipeline
     pipeline = ArticlePipeline(
@@ -423,6 +499,23 @@ def run_modular_mode(args, config):
         image_suggestions = pipeline.suggest_images(args.project_id)
         print(f"Image suggestions for project {args.project_id}:")
         print(json.dumps(image_suggestions, indent=2))
+
+    if args.suggest_hashtags:
+        if not args.project_id:
+            logger.error("Project ID is required for suggesting hashtags")
+            return
+            
+        # Initialize LLM client
+        llm_client = create_llm_client(config)
+        
+        # Generate hashtags
+        hashtags = suggest_hashtags(llm_client, args.project_id, Path(args.data_dir))
+        if hashtags:
+            print("\nSuggested hashtags for your Medium article:")
+            print(", ".join(hashtags))
+        else:
+            print("\nNo hashtags could be generated. Please check the project ID and try again.")
+        return
 
 
 def publish_to_medium(config, article, args) -> Dict[str, Any]:

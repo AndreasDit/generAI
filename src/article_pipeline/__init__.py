@@ -235,7 +235,7 @@ class ArticlePipeline:
         ideas = []
         idea_files = []
         
-        for idea_file in ideas_dir.glob("idea_*.json"):
+        for idea_file in ideas_dir.glob("*.json"):
             try:
                 with open(idea_file) as f:
                     idea = json.load(f)

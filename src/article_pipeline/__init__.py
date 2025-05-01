@@ -71,7 +71,7 @@ class ArticlePipeline:
         
         # Initialize other components
         self.project_manager = ProjectManager(llm_client, data_dir / "projects")
-        self.content_generator = ContentGenerator(llm_client, data_dir / "projects")
+        self.content_generator = ContentGenerator(llm_client, data_dir / "projects", self.web_search)
         self.article_assembler = ArticleAssembler(llm_client, data_dir / "projects")
         self.seo_optimizer = SEOOptimizer(llm_client, data_dir / "projects")
         self.feedback_manager = FeedbackManager(data_dir / "projects")

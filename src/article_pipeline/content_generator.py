@@ -8,12 +8,12 @@ from typing import Dict, Any, List, Optional
 from loguru import logger
 
 from src.llm_client import LLMClient
-
+from src.web_search import TavilySearchManager
 
 class ContentGenerator:
     """Generates content for articles."""
     
-    def __init__(self, openai_client: LLMClient, projects_dir: Path):
+    def __init__(self, openai_client: LLMClient, projects_dir: Path, web_search: TavilySearchManager):
         """Initialize the content generator.
         
         Args:
@@ -22,6 +22,7 @@ class ContentGenerator:
         """
         self.llm_client = openai_client
         self.projects_dir = projects_dir
+        self.web_search = web_search
     
     def generate_image_suggestions(self, project_id: str) -> Dict[str, Any]:
         """Generate image suggestions for a refined article.

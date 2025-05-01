@@ -39,15 +39,15 @@ class TrendAnalyzer:
         
         # Transform the research topic into an effective search term
         search_term = self.llm_client.transform_search_term(research_topic)
-        logger.info(f"Using transformed search term: {search_term}")
         
         # Search for trending content using the transformed search term
         search_results = self.web_search.search(search_term)
+
+        # Extract full content from search results
+        extracted_contents = self.web_search.extract_content_from_search_results(search_results)
         
         # Extract relevant information from search results
         trends = []
-        extracted_contents = []
-        
         if "results" in search_results:
             # Add basic information to trends list
             for result in search_results["results"]:
@@ -58,26 +58,7 @@ class TrendAnalyzer:
                     "source": result.get("source", ""),
                     "date": result.get("date", "")
                 })
-            
-            # Extract full content from all URLs in a single batch
-            urls = [result.get("url", "") for result in search_results["results"] if result.get("url", "")]
-            logger.info(f"Extracting content from URLs: {urls}")
-            if urls:
-                extracted_contents_list = self.web_search.extract_content_from_url(urls)
-                # logger.info(f"Extracted contents: {extracted_contents_list}")  # Add this line for debugging inf
                 
-                # Process extracted contents
-                for i, result in enumerate(search_results["results"]):
-                    url = result.get("url", "")
-                    if url and i < len(extracted_contents_list) and extracted_contents_list[i]["success"]:
-                        extracted_contents.append({
-                            "title": result.get("title", extracted_contents_list[i].get("title", "")),
-                            "url": url,
-                            "content": extracted_contents_list[i].get("content", ""),
-                            "source": result.get("source", ""),
-                            "date": result.get("date", "")
-                        })
-        
         # Analyze trends using LLM with extracted content
         system_prompt = (
             "You are an expert content strategist who analyzes trends in content. "
@@ -164,11 +145,11 @@ class TrendAnalyzer:
         
         # Search for competitor content using the transformed search term
         search_results = self.web_search.get_competitor_content(search_term)
+
+        # Initialize lists for competitors
+        competitors = []
         
         # Extract relevant information from search results
-        competitors = []
-        extracted_contents = []
-        
         if "results" in search_results:
             # Add basic information to competitors list
             for result in search_results["results"]:
@@ -179,23 +160,9 @@ class TrendAnalyzer:
                     "source": result.get("source", ""),
                     "date": result.get("date", "")
                 })
-            
-            # Extract full content from all URLs in a single batch
-            urls = [result.get("url", "") for result in search_results["results"] if result.get("url", "")]
-            if urls:
-                extracted_contents_list = self.web_search.extract_content_from_url(urls)
-                
-                # Process extracted contents
-                for i, result in enumerate(search_results["results"]):
-                    url = result.get("url", "")
-                    if url and i < len(extracted_contents_list) and extracted_contents_list[i]["success"]:
-                        extracted_contents.append({
-                            "title": result.get("title", extracted_contents_list[i].get("title", "")),
-                            "url": url,
-                            "content": extracted_contents_list[i].get("content", ""),
-                            "source": result.get("source", ""),
-                            "date": result.get("date", "")
-                        })
+        
+        # Extract full content from search results
+        extracted_contents = self.web_search.extract_content_from_search_results(search_results)
         
         # Analyze competitors using LLM with extracted content
         system_prompt = (

@@ -115,7 +115,7 @@ class SEOOptimizer:
                 json.dump(metadata, f, indent=2)
             
             logger.info(f"Optimized article for project: {project_id}")
-            return
+            return seo_optimized_article
             
         except Exception as e:
             logger.error(f"Error optimizing article: {e}")

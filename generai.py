@@ -134,6 +134,11 @@ def setup_argparse() -> argparse.ArgumentParser:
                         help="Evaluate existing ideas and select the best one")
     modular_parser.add_argument("--max-ideas", type=int, default=10,
                         help="Maximum number of ideas to evaluate")
+    modular_parser.add_argument("--generate-tweets", action="store_true",
+                        help="Generate tweets for an article idea")
+    modular_parser.add_argument("--idea-id", type=str,
+                        help="ID of the idea to generate tweets for (optional)")
+    
     
     modular_parser.add_argument("--create-project", action="store_true",
                         help="Create a project for the next article in the queue")
@@ -289,6 +294,25 @@ def run_modular_mode(args, config):
             print(f"Selected idea: {selected_idea}")
         else:
             print("No suitable idea selected.")
+            
+    if args.generate_tweets:
+        # Initialize tweet generator
+        tweet_generator = TweetGenerator(llm_client=pipeline.llm_client, data_dir=pipeline.data_dir)
+        
+        # If idea_id is provided, load that specific idea
+        if args.idea_id:
+            idea_file = pipeline.data_dir / "ideas" / f"idea_{args.idea_id}.json"
+            if idea_file.exists():
+                with open(idea_file) as f:
+                    idea = json.load(f)
+                tweet_generator.generate_tweets_for_idea(idea)
+            else:
+                logger.error(f"Idea file not found: {idea_file}")
+        # Otherwise use the selected idea from evaluation
+        elif selected_idea:
+            tweet_generator.generate_tweets_for_idea(selected_idea)
+        else:
+            logger.error("No idea available for tweet generation. Please provide --idea-id or run --evaluate-ideas first.")
     
     if args.create_project:
         project_id = pipeline.create_project(project_id=args.project_id)

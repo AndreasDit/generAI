@@ -279,6 +279,8 @@ class ArticleAssembler:
 
         Remember, the goal is to make the text sound natural, engaging, and as if it were written by a human rather than an AI.
         
+        Personalize the headline, for example use How I Did instead if How To. Other examples are The lesson I learned, The mistake I made, Advice you’d give to your past-self, I wish I had known this sooner.
+        
         Format the article with clear section headings and paragraphs.
         Use the content as the primary input to create a cohesive and well-structured article. Use the article idea as context to ensure the article aligns with the original idea.
         Return the article as a markdown file. return ONLY the article content. Do NOT write a json file. Instead write a normal readable article. Use markdown formatting.

@@ -41,6 +41,7 @@ from src.utils import setup_logging, parse_outline
 # Import the new modular article pipeline
 from src.article_pipeline import ArticlePipeline
 from src.article_pipeline.utils import setup_pipeline_logging
+from src.article_pipeline.tweet_generator import TweetGenerator
 
 
 def setup_argparse() -> argparse.ArgumentParser:
@@ -375,21 +376,18 @@ def run_modular_mode(args, config):
         # Initialize tweet generator
         tweet_generator = TweetGenerator(llm_client=pipeline.llm_client, data_dir=pipeline.data_dir)
         
-        # If idea_id is provided, load that specific idea
-        if args.idea_id:
-            idea_file = pipeline.data_dir / "ideas" / f"idea_{args.idea_id}.json"
+        # Load idea from project directory
+        if args.project_id:
+            idea_file = pipeline.data_dir / "projects" / args.project_id / "idea.json"
             if idea_file.exists():
                 with open(idea_file) as f:
                     idea = json.load(f)
                 tweet_generator.generate_tweets_for_idea(idea)
             else:
-                logger.error(f"Idea file not found: {idea_file}")
-        # Otherwise use the selected idea from evaluation
-        elif selected_idea:
-            tweet_generator.generate_tweets_for_idea(selected_idea)
+                logger.error(f"idea.json not found in project directory: {idea_file}")
         else:
-            logger.error("No idea available for tweet generation. Please provide --idea-id or run --evaluate-ideas first.")
-    
+            logger.error("No project_id provided for tweet generation. Please provide --project-id.")
+
     if args.create_project:
         project_id = pipeline.create_project(project_id=args.project_id)
         if project_id:

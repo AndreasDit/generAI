@@ -105,7 +105,7 @@ class TweetGenerator:
             Format your response as a JSON object with three keys: 'morning', 'afternoon', and 'evening',
             each containing the refined tweet text.
             
-            Return ONLY the JSON object, nothing else.
+            Return ONLY the JSON object, nothing else. Do not mark it as a JSON object.
             """
             
             try:

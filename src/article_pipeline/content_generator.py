@@ -194,7 +194,7 @@ class ContentGenerator:
         user_prompt = f"""Create a detailed outline for an article about '{idea.get('title', '')}'.
 
         Here is the idea data to inform your outline:
-        {json.dumps(idea, indent=2)}
+        {json.dumps(idea, indent=3)}
         Here is some research:
         {search_results_data}
         
@@ -215,7 +215,7 @@ class ContentGenerator:
         CONCLUSION: [Brief description of the conclusion]
         
         No more than 3 main sections.
-        Each description should contain the following: detailed important points from the research, necessary hard facts, and necessary hard data
+        Each description should contain the following: detailed important points from the research, necessary hard facts, and necessary hard data.
         Do not use any markdown or other formatting.
         """
         

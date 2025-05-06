@@ -101,6 +101,7 @@ class TweetGenerator:
             Evening tweet (question):
             {evening_tweet['content']}
             
+            Rewrite the tweets to be engaging, informative, and relevant to the article topic.
             Make each tweet engaging, concise (under 280 characters), and include 1-2 relevant emojis.
             Format your response as a JSON object with three keys: 'morning', 'afternoon', and 'evening',
             each containing the refined tweet text.

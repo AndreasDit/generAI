@@ -389,7 +389,7 @@ class ContentGenerator:
                     
                     The paragraph should:
                     1. Be informative and engaging
-                    2. Include relevant details and examples
+                    2. Include relevant details and examples. Include necessary hard facts and hard data. Be precise, concise and above all else provide all necesasry information.
                     3. Flow naturally from previous content
                     4. Be 2-3 paragraphs long
                     """
@@ -402,7 +402,7 @@ class ContentGenerator:
                             ],
                             temperature=0.7,
                             max_tokens=500,
-                            use_text_generation_model=True
+                            use_text_generation_model=False
                         )
                         
                         paragraphs.append({

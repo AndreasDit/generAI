@@ -282,7 +282,7 @@ class ArticlePipeline:
         - selected_idea_index: Index of the selected idea (0-based)
         - reasoning: Explanation of the selection
         - improvements: Suggested improvements
-        - worst_idea_indices: Array of indices of the 11 worst ideas (0-based)
+        - worst_idea_indices: Array of indices of the 3 worst ideas (0-based)
         
         Return ONLY the JSON object, nothing else. No identifer that this is a JSON object.
         """

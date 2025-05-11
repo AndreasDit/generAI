@@ -402,7 +402,7 @@ class ContentGenerator:
                             ],
                             temperature=0.7,
                             max_tokens=500,
-                            use_text_generation_model=False
+                            use_text_generation_model=True
                         )
                         
                         paragraphs.append({

@@ -61,73 +61,98 @@ The following API keys are required:
 
 ## Usage
 
-### Running the Pipeline
+The application offers two main modes: `simple` for quick article generation and `modular` for a step-by-step pipeline.
 
-The pipeline can be run in modular mode, allowing you to execute specific steps:
+### Simple Mode
 
+For quickly generating a complete article on a given topic.
+
+**Example:**
 ```bash
-python generai.py modular <command> [options]
+python generai.py simple --topic "The Future of Artificial Intelligence" --publish
 ```
 
-Available commands:
+### Modular Mode
 
-1. Generate article ideas:
-```bash
-python generai.py modular --generate-ideas
-```
+For a more controlled, step-by-step process from idea to publication.
 
-2. Evaluate ideas:
-```bash
-python generai.py modular --evaluate-ideas
-```
+#### Full Pipeline Execution
 
-3. Create project:
-```bash
-python generai.py modular --create-project --idea "Your article idea"
-```
+To run the entire pipeline automatically:
 
-4. Generate outline:
-```bash
-python generai.py modular --generate-outline --project-id <project_id>
-```
+- **Run the complete pipeline for a new topic:** This will perform trend analysis, generate ideas, and process the best one.
+  ```bash
+  python generai.py modular --run-full-pipeline --research-topic "SaaS business ideas"
+  ```
 
-5. Generate paragraphs:
-```bash
-python generai.py modular --generate-paragraphs --project-id <project_id>
-```
+- **Process the next article in the queue:** This will take the next available idea and run it through all the stages.
+  ```bash
+  python generai.py modular --process-next-article
+  ```
 
-6. Assemble article:
-```bash
-python generai.py modular --assemble-article --project-id <project_id>
-```
+#### Individual Module Execution
 
-7. Refine article:
-```bash
-python generai.py modular --refine-article --project-id <project_id>
-```
+You can also execute each module of the pipeline individually. This is useful for debugging or for manual control over the process.
 
-### SEO Optimization and Hashtag Generation
+- **1. Generate Ideas:** Research a topic and generate article ideas.
+  ```bash
+  python generai.py modular --generate-ideas --research-topic "Python programming" --num-ideas 10
+  ```
 
-The GenerAI pipeline includes a robust SEO optimization feature that analyzes content for search engine visibility and suggests improvements. Additionally, it generates relevant hashtags to enhance article reach and engagement. These hashtags are now written to a file for easy access and integration into your content strategy.
+- **2. Evaluate Ideas:** Evaluate the generated ideas and select the best one to be processed.
+  ```bash
+  python generai.py modular --evaluate-ideas
+  ```
 
-To utilize these features, run the following commands:
+- **3. Create Project:** Create a project for the selected article idea.
+  ```bash
+  python generai.py modular --create-project
+  ```
 
-- Optimize for SEO:
-```bash
-python generai.py modular --optimize-seo --project-id <project_id>
-```
+- **4. Generate Outline:** Generate an article outline for a specific project.
+  ```bash
+  python generai.py modular --generate-outline --project-id <project_id>
+  ```
 
-- Generate Hashtags:
-```bash
-python generai.py modular --generate-hashtags --project-id <project_id>
-```
+- **5. Generate Paragraphs:** Write the content for each section of the outline.
+  ```bash
+  python generai.py modular --generate-paragraphs --project-id <project_id>
+  ```
 
-The generated hashtags will be saved in the `hashtags.txt` file within your project directory.
+- **6. Assemble Article:** Combine the generated paragraphs into a full article draft.
+  ```bash
+  python generai.py modular --assemble-article --project-id <project_id>
+  ```
 
-9. Analyze feedback:
-```bash
-python generai.py modular --analyze-feedback --project-id <project_id>
-```
+- **7. Refine Article:** Review and refine the assembled article for clarity and flow.
+  ```bash
+  python generai.py modular --refine-article --project-id <project_id>
+  ```
+
+- **8. SEO Optimization:** Optimize the article for search engines.
+  ```bash
+  python generai.py modular --optimize-seo --project-id <project_id>
+  ```
+
+- **9. Suggest Images:** Generate suggestions for relevant images and illustrations.
+  ```bash
+  python generai.py modular --suggest-images --project-id <project_id>
+  ```
+
+- **10. Generate Social Media Content:**
+  - **Hashtags:** Generate relevant hashtags for social media promotion.
+    ```bash
+    python generai.py modular --suggest-hashtags --project-id <project_id>
+    ```
+  - **Tweets:** Generate tweets to promote the article.
+    ```bash
+    python generai.py modular --generate-tweets --project-id <project_id>
+    ```
+
+- **11. Publish to Medium:** Publish the final article to Medium.
+  ```bash
+  python generai.py modular --publish-to-medium --project-id <project_id> --tags "ai,tech,writing"
+  ```
 
 ## Project Structure
 

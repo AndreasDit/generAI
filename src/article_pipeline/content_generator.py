@@ -391,7 +391,9 @@ class ContentGenerator:
                     1. Be informative and engaging
                     2. Include relevant details and examples. Include necessary hard facts and hard data. Be precise, concise and above all else provide all necesasry information.
                     3. Flow naturally from previous content
-                    4. Be 2-3 paragraphs long
+                    4. Be 2-4 paragraphs long
+                    
+                    After the parapraph list some relevant hard data as bullet points.
                     """
                     
                     try:

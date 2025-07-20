@@ -112,12 +112,12 @@ class ArticlePipeline:
         logger.info("Generating article ideas")
         
         # Analyze trends
-        trends = self.trend_analyzer.analyze_trends(research_topic or "current trends")
-        logger.info(f"Trends: {trends}")
+        # trends = self.trend_analyzer.analyze_trends(research_topic or "current trends")
+        # logger.info(f"Trends: {trends}")
         
         # Research competitors
-        competitors = self.trend_analyzer.research_competitors(research_topic or "current trends")
-        logger.info(f"Competitors: {competitors}")
+        # competitors = self.trend_analyzer.research_competitors(research_topic or "current trends")
+        # logger.info(f"Competitors: {competitors}")
         
         # Use the provided num_ideas or get from environment
         # Make sure we respect the value in .env file
@@ -130,24 +130,12 @@ class ArticlePipeline:
             "Your ideas should be unique, valuable, and based on trend analysis."
         )
         
-        user_prompt = f"""Generate article ideas based on the following research:
-
+        user_prompt = f"""
         Research Topic:
         {research_topic}
 
-        Trend Analysis:
-        {json.dumps(trends, indent=2)}
         
-        Competitor Research:
-        {json.dumps(competitors, indent=2)}
-        
-        Generate {num_ideas} unique article ideas that:
-        1. Each idea focusses specifically on one trend or on one approach a competitor is using
-        2. Are aligned with the overall research
-        3. Are specific to the target audience
-        4. Are innovative and original
-        5. Fill content gaps
-        6. Provide unique value
+        Generate {num_ideas} unique article ideas.
         
         Format each idea as a JSON object with:
         - title: Article title
@@ -282,7 +270,7 @@ class ArticlePipeline:
         - selected_idea_index: Index of the selected idea (0-based)
         - reasoning: Explanation of the selection
         - improvements: Suggested improvements
-        - worst_idea_indices: Array of indices of the 3 worst ideas (0-based)
+        - worst_idea_indices: Array of indices of the 9 worst ideas (0-based)
         
         Return ONLY the JSON object, nothing else. No identifer that this is a JSON object.
         """
@@ -363,19 +351,31 @@ class ArticlePipeline:
         
         return None
     
-    def create_project(self, project_id: str = None) -> Optional[str]:
+    def create_project(self, idea_filename: str = None) -> Optional[str]:
         """Create a project from the selected idea.
-        
+
+        Args:
+            idea_filename: The filename of the idea to process.
+
         Returns:
             Project ID or None if creation failed
         """
         logger.info("Creating project from selected idea")
-        
+
         # Load selected idea
-        selected_file = self.data_dir / "article_queue" / f"{project_id}.json"
+        if idea_filename:
+            selected_file = self.data_dir / "article_queue" / idea_filename
+        else:
+            # Fallback to the old logic if no filename is provided
+            queue_files = sorted((self.data_dir / "article_queue").glob("*.json"))
+            if not queue_files:
+                logger.error("No articles in the queue")
+                return None
+            selected_file = queue_files[0]
+
         logger.info(f"Selected file: {selected_file}")
         if not selected_file.exists():
-            logger.error("No selected idea found")
+            logger.error(f"No selected idea found with filename: {idea_filename}")
             return None
         
         try:
@@ -389,21 +389,20 @@ class ArticlePipeline:
                 
                 # Move the selected idea file to the project folder
                 project_dir = self.data_dir / "projects" / project_id
-                logger.info(f"Project directory: {project_dir}")
                 project_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 # Copy the idea to the project folder
                 project_idea_file = project_dir / "idea.json"
                 with open(project_idea_file, "w") as f:
                     json.dump(idea, f, indent=2)
-                
+
                 # Remove the file from article_queue
                 try:
                     selected_file.unlink()
                     logger.info(f"Removed selected idea file from article_queue: {selected_file}")
                 except Exception as e:
                     logger.error(f"Error removing selected idea file from article_queue: {e}")
-                
+
                 return project_id
             
         except Exception as e:
@@ -627,15 +626,19 @@ class ArticlePipeline:
             Dictionary containing the generated article data or None if failed
         """
         try:
-            # If project_id is provided, continue from the last successful step
+            # If project_id is provided, it could be a project ID or a filename
             if project_id:
-                logger.info(f"Continuing processing for existing project: {project_id}")
-                
-                # Check if project exists
+                # Check if it's a project ID
                 project_dir = self.projects_dir / project_id
-                if not project_dir.exists():
-                    logger.error(f"Project not found: {project_id}")
-                    return None
+                if project_dir.exists():
+                    logger.info(f"Continuing processing for existing project: {project_id}")
+                    # ... (rest of the logic for continuing a project)
+                else:
+                    # It's a filename from the queue
+                    project_id = self.create_project(idea_filename=project_id)
+                    if not project_id:
+                        logger.error(f"Failed to create project from idea: {project_id}")
+                        return None
                 
                 # Load project metadata to determine the last successful step
                 metadata_file = project_dir / "metadata.json"
@@ -723,26 +726,12 @@ class ArticlePipeline:
                 if not queue_files:
                     logger.error("No article files found in the queue")
                     return None
-                    
-                selected_file = queue_files[0]
-                logger.info(f"Processing article from queue: {selected_file.name}")
                 
-                # Load the idea
-                with open(selected_file) as f:
-                    idea = json.load(f)
-                
-                # Create project
-                project_id = self.project_manager.create_project(idea)
+                # Pass the filename to create_project
+                project_id = self.create_project(idea_filename=queue_files[0].name)
                 if not project_id:
                     logger.error("Failed to create project")
                     return None
-                    
-                # Remove the file from the queue
-                try:
-                    selected_file.unlink()
-                    logger.info(f"Removed article file from queue: {selected_file}")
-                except Exception as e:
-                    logger.error(f"Error removing article file from queue: {e}")
                 
                 # Perform web search before outline generation
                 search_success = self.perform_web_search(project_id)

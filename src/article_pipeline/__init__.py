@@ -39,6 +39,7 @@ from .content_generator import ContentGenerator
 from .article_assembler import ArticleAssembler
 from .seo_optimizer import SEOOptimizer
 from .utils import setup_directory_structure
+from .article_enhancer import ArticleEnhancer
 
 class ArticlePipeline:
     """Main class for orchestrating the article generation pipeline."""
@@ -76,6 +77,7 @@ class ArticlePipeline:
         self.article_assembler = ArticleAssembler(llm_client, data_dir / "projects")
         self.seo_optimizer = SEOOptimizer(llm_client, data_dir / "projects")
         self.feedback_manager = FeedbackManager(data_dir / "projects")
+        self.article_enhancer = ArticleEnhancer(llm_client, data_dir / "projects")
     
     def analyze_trends(self, research_topic: str) -> Dict[str, Any]:
         """Analyze trends for a research topic.
@@ -683,6 +685,13 @@ class ArticlePipeline:
                     current_status = "article_assembled"
                 
                 if current_status == "article_assembled":
+                    # Add value to article
+                    if not self.article_enhancer.add_value_to_article(project_id):
+                        logger.error(f"Failed to add value to article for project {project_id}")
+                        return None
+                    current_status = "article_enhanced"
+
+                if current_status == "article_enhanced":
                     # Refine article
                     refined_article = self.refine_article(project_id)
                     if not refined_article:
@@ -753,6 +762,11 @@ class ArticlePipeline:
                 article = self.assemble_article(project_id)
                 if not article:
                     logger.error(f"Failed to assemble article for project {project_id}")
+                    return None
+                
+                # Add value to article
+                if not self.article_enhancer.add_value_to_article(project_id):
+                    logger.error(f"Failed to add value to article for project {project_id}")
                     return None
                 
                 # Refine article
@@ -828,6 +842,11 @@ class ArticlePipeline:
             article = self.assemble_article(project_id)
             if not article:
                 logger.error("Failed to assemble article")
+                return None
+            
+            # Add value to article
+            if not self.article_enhancer.add_value_to_article(project_id):
+                logger.error(f"Failed to add value to article for project {project_id}")
                 return None
             
             # Step 7: Refine article

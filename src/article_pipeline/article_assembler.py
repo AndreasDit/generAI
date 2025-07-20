@@ -194,7 +194,7 @@ class ArticleAssembler:
             logger.error(f"Project not found: {project_id}")
             return {}
         
-        article_file = project_dir / "article.md"
+        article_file = project_dir / "enhanced_article.md"
         if not article_file.exists():
             logger.error(f"Project article not found: {project_id}")
             return {}

@@ -82,7 +82,7 @@ class ContentGenerator:
         Value Proposition: {idea_data.get('value_proposition', 'No value proposition')}
         """
         
-        user_prompt = f"""Analyze the following article and suggest 3-5 strategic locations where images would enhance the content:
+        user_prompt = f"""Analyze the following article and suggest 3-7 strategic locations where images would enhance the content:
 
         This is the article idea:
         {idea_context}        

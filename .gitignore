@@ -12,6 +12,7 @@ data/*
 
 # C extensions
 *.so
+project*
 
 # Distribution / packaging
 .Python

@@ -155,6 +155,9 @@ def setup_argparse() -> argparse.ArgumentParser:
     modular_parser.add_argument("--assemble-article", action="store_true",
                         help="Assemble the article for the current project")
     
+    modular_parser.add_argument("--add-value-to-article", action="store_true",
+                        help="Add value to the article for the current project")
+    
     modular_parser.add_argument("--refine-article", action="store_true",
                         help="Refine the article for the current project")
     
@@ -292,7 +295,7 @@ def suggest_hashtags(llm_client: LLMClient, project_id: str, data_dir: Path) -> 
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.7,
+            temperature=1,
             max_tokens=100
         )
         
@@ -427,6 +430,16 @@ def run_modular_mode(args, config):
             print(f"Content length: {len(article)} characters")
         else:
             print(f"Failed to assemble article for project {args.project_id}")
+
+    if args.add_value_to_article:
+        if not args.project_id:
+            print("Error: --project-id is required for adding value to the article.")
+            return
+        success = pipeline.article_enhancer.add_value_to_article(args.project_id)
+        if success:
+            print(f"Added value to article for project {args.project_id}.")
+        else:
+            print(f"Failed to add value to article for project {args.project_id}.")
     
     if args.refine_article:
         if not args.project_id:

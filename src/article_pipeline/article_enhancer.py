@@ -31,7 +31,8 @@ class ArticleEnhancer:
         Article:
         {article_content}"""
         response1 = self.llm_client.chat_completion(
-            messages=[{"role": "user", "content": prompt1}]
+            messages=[{"role": "user", "content": prompt1}],
+                use_text_generation_model=True
         )
 
         # Prompt 2: Choose most important suggestions
@@ -63,7 +64,8 @@ class ArticleEnhancer:
                 {"role": "user", "content": prompt2},
                 {"role": "assistant", "content": response2},
                 {"role": "user", "content": prompt3},
-            ]
+            ],
+                use_text_generation_model=True
         )
 
         enhanced_article_path = project_dir / "enhanced_article.md"

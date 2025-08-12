@@ -112,7 +112,7 @@ class ContentGenerator:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7,
+                temperature=1,
                 max_tokens=1500
             )
                         
@@ -214,7 +214,7 @@ class ContentGenerator:
           - Subsection 2.2: [Description]
         CONCLUSION: [Brief description of the conclusion]
         
-        No more than 3 main sections.
+        No more than 3 main sections. No more than 3 subsections per section.
         Each description should contain the following: detailed important points from the research, necessary hard facts, and necessary hard data.
         Do not use any markdown or other formatting.
         """
@@ -228,7 +228,7 @@ class ContentGenerator:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7,
+                temperature=1,
                 max_tokens=1000,
                 use_text_generation_model=True
             )
@@ -352,7 +352,7 @@ class ContentGenerator:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    temperature=0.7,
+                    temperature=1,
                     max_tokens=500,
                     use_text_generation_model=True
                 )
@@ -402,7 +402,7 @@ class ContentGenerator:
                                 {"role": "system", "content": system_prompt},
                                 {"role": "user", "content": user_prompt}
                             ],
-                            temperature=0.7,
+                            temperature=1,
                             max_tokens=500,
                             use_text_generation_model=True
                         )
@@ -433,7 +433,7 @@ class ContentGenerator:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    temperature=0.7,
+                    temperature=1,
                     max_tokens=500,
                     use_text_generation_model=True
                 )

@@ -146,7 +146,7 @@ class ArticleAssembler:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7,
+                temperature=1,
                 max_tokens=2000,
                 use_text_generation_model=False
             )
@@ -292,7 +292,7 @@ class ArticleAssembler:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7,
+                temperature=1,
                 max_tokens=2000,
                 use_text_generation_model=True
             )

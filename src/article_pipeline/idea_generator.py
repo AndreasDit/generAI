@@ -133,7 +133,7 @@ class IdeaGenerator:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.8,
+                temperature=1,
                 max_tokens=2000,
             )
             
@@ -204,7 +204,7 @@ class IdeaGenerator:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7,
+                temperature=1,
                 max_tokens=1000,
             )
             

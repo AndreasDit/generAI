@@ -115,7 +115,7 @@ class TweetGenerator:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    temperature=0.7,
+                    temperature=1,
                     max_tokens=500,
                     use_text_generation_model=True
                 )

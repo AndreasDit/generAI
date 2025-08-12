@@ -26,14 +26,14 @@ LLM_CONFIG = {
         "api_key": os.getenv("ANTHROPIC_API_KEY"),
         "model": "claude-3-sonnet-20240229",
         "max_tokens": 4096,
-        "temperature": 0.7
+        "temperature": 1
     },
     "openai": {
         "api_key": os.getenv("OPENAI_API_KEY"),
         "model": os.getenv("OPENAI_MODEL"),
         "text_generation_model": os.getenv("OPENAI_MODEL_TEXT_GENERATION"),
         "max_tokens": 4096,
-        "temperature": 0.7
+        "temperature": 1
     }
 }
 

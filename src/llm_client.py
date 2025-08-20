@@ -108,7 +108,7 @@ class OpenAIClient(LLMClient):
         self.max_tokens = config["max_tokens"]
         self.temperature = config["temperature"]
     
-    def chat_completion(self, messages: List[Dict[str, str]], temperature: Optional[float] = None, max_tokens: Optional[int] = None, use_text_generation_model: bool = False) -> str:
+    def chat_completion(self, messages: List[Dict[str, str]], temperature: Optional[float] = None, max_tokens: Optional[int] = None, use_text_generation_model: bool = False, model_name: str = None) -> str:
         """Generate a chat completion.
         
         Args:
@@ -116,6 +116,7 @@ class OpenAIClient(LLMClient):
             temperature: Sampling temperature (0.0 to 1.0), defaults to instance value
             max_tokens: Maximum number of tokens to generate, defaults to instance value
             use_text_generation_model: Whether to use the text generation model instead of the default model
+            model_name: Name of the model to use (overrides instance value if provided)
             
         Returns:
             Generated text response
@@ -126,7 +127,10 @@ class OpenAIClient(LLMClient):
         max_tokens = max_tokens if max_tokens is not None else self.max_tokens
         
         # Choose the appropriate model
-        model = self.text_generation_model if use_text_generation_model else self.model
+        if not model_name:
+            model = self.text_generation_model if use_text_generation_model else self.model
+        else:
+            model = model_name
 
         logger.info(f"Using model {model}")
         try:

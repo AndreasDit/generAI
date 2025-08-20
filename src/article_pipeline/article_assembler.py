@@ -294,7 +294,7 @@ class ArticleAssembler:
                 ],
                 temperature=1,
                 max_tokens=2000,
-                use_text_generation_model=True
+                model_name='gpt-5'
             )
             
             # Update the article with refined content

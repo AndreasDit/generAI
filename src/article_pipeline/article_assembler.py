@@ -279,6 +279,8 @@ class ArticleAssembler:
 
         Remember, the goal is to make the text sound natural, engaging, and as if it were written by a human rather than an AI.
         
+        Rewrite the following article to be more human, conversational, and engaging, inspired by popular writers on Medium known for blending insight with approachable prose. Create a tone that feels warm, genuine, and reflective—like a knowledgeable friend sharing thoughts over coffee. Vary sentence structures for natural rhythm, mixing short impactful sentences with longer, descriptive ones. Use vivid imagery, metaphors, and analogies to bring clarity to complex concepts. Insert occasional personal stories, reflections, or questions to foster reader rapport. Address the reader inclusively and directly. Structure the article into well-defined sections with descriptive headings for easy navigation. Wrap up with a gentle prompt encouraging reader reflection or discussion. Add relevant quotes or references as helpful context. Avoid stiff, formulaic, or robotic language to produce a text that breathes and resonates authentically.
+        
         Personalize the headline, for example use How I Did instead if How To. Other examples are The lesson I learned, The mistake I made, Advice you’d give to your past-self, I wish I had known this sooner.
         
         Format the article with clear section headings and paragraphs.

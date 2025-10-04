@@ -491,9 +491,10 @@ class ContentGenerator:
         Key Points: {', '.join(idea.get('key_points', []))}
 
         ARTICLE STRUCTURE:
-        1. Hook (50-75 words): Start with a relatable problem, question, or surprising insight that immediately resonates with the reader's experience
-        2. Main Content (350-400 words): Deliver 3-4 practical strategies or insights organized with clear subheadings (use ###). Each point should include a specific, actionable example
-        3. Conclusion (75-100 words): Summarize the key takeaway and include one simple action the reader can take today
+        1. A catchy subtitle that complements the title and animates people to click on the article.
+        2. Hook (50-75 words): Start with a relatable problem, question, or surprising insight that immediately resonates with the reader's experience
+        3. Main Content (350-400 words): Deliver 3-4 practical strategies or insights organized with clear subheadings (use ###). Each point should include a specific, actionable example
+        4. Conclusion (75-100 words): Summarize the key takeaway and include one simple action the reader can take today
 
         WRITING STYLE REQUIREMENTS:
         - Use short paragraphs (2-3 sentences maximum)

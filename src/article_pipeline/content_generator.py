@@ -464,3 +464,70 @@ class ContentGenerator:
         
         logger.info(f"Generated paragraphs for project: {project_id}")
         return paragraphs
+
+    def generate_article_from_idea(self, project_id: str, idea: Dict[str, Any]) -> Optional[str]:
+        """Generate a complete article from an idea in a single step.
+
+        Args:
+            project_id: ID of the project.
+            idea: Dictionary containing the article idea.
+
+        Returns:
+            The generated article as a string, or None if generation fails.
+        """
+        logger.info(f"Generating article from idea for project: {project_id}")
+        
+        system_prompt = (
+            "You are an experienced mindfulness and mental health writer who publishes on Medium. Your specialty is creating practical, evidence-based content that helps busy professionals improve their mental well-being without overwhelming them."
+        )
+
+        user_prompt = f"""
+        TARGET AUDIENCE: Adults aged 25-45 seeking actionable mental health and mindfulness strategies they can implement immediately in their daily lives.
+
+        TASK: Write a 500-600 word Medium article on the following topic:
+        
+        Title: {idea.get('title', '')}
+        Description: {idea.get('description', '')}
+        Key Points: {', '.join(idea.get('key_points', []))}
+
+        ARTICLE STRUCTURE:
+        1. Hook (50-75 words): Start with a relatable problem, question, or surprising insight that immediately resonates with the reader's experience
+        2. Main Content (350-400 words): Deliver 3-4 practical strategies or insights organized with clear subheadings (use ###). Each point should include a specific, actionable example
+        3. Conclusion (75-100 words): Summarize the key takeaway and include one simple action the reader can take today
+
+        WRITING STYLE REQUIREMENTS:
+        - Use short paragraphs (2-3 sentences maximum)
+        - Write in a warm, conversational tone as if advising a friend
+        - Use "you" and "your" to address readers directly
+        - Include at least one concrete, specific example or scenario
+        - Avoid clinical jargon, generic phrases like "in today's world," and corporate language
+        - Focus on actionable advice, not abstract concepts
+        - Use active voice throughout
+
+        WHAT TO AVOID:
+        - Fluff and filler words
+        - Generic self-help clichés
+        - Overly spiritual or medical language
+        - Lists without context or explanation
+        - Promises of quick fixes or miracle solutions
+
+        FORMAT: Write in plain text with clear markdown headers (###) for subheadings. Make the content scannable and engaging for Medium readers.
+        """
+
+        try:
+            response = self.llm_client.chat_completion(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=1,
+                max_tokens=3000,
+                # use_text_generation_model=True,
+                model_name='gpt-5'
+            )
+
+            return response.strip()
+
+        except Exception as e:
+            logger.error(f"Error generating article from idea: {e}")
+            return None

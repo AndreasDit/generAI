@@ -866,3 +866,46 @@ class ArticlePipeline:
         except Exception as e:
             logger.error(f"Error in pipeline execution: {e}")
             return None
+
+    def generate_article_from_idea(self, idea_filename: str) -> Optional[Dict[str, str]]:
+        """
+        Processes the next article from an idea.json file, generating a complete article.md
+        in a single step.
+
+        Args:
+            idea_filename: The name of the idea file to process.
+
+        Returns:
+            A dictionary containing the generated article data, or None if the process fails.
+        """
+        try:
+            project_id = self.create_project(idea_filename=idea_filename)
+            if not project_id:
+                logger.error(f"Failed to create project from idea: {idea_filename}")
+                return None
+
+            project_dir = self.projects_dir / project_id
+            idea_file = project_dir / "idea.json"
+            if not idea_file.exists():
+                logger.error(f"idea.json not found in project directory: {project_dir}")
+                return None
+
+            with open(idea_file) as f:
+                idea = json.load(f)
+
+            article = self.content_generator.generate_article_from_idea(project_id, idea)
+            if not article:
+                logger.error(f"Failed to generate article from idea for project {project_id}")
+                return None
+
+            # Save the generated article to article.md
+            article_path = project_dir / "article.md"
+            with open(article_path, "w") as f:
+                f.write(article)
+
+            logger.info(f"Successfully generated article for project {project_id}")
+            return {"project_id": project_id, "article_path": str(article_path)}
+
+        except Exception as e:
+            logger.error(f"Error processing article from idea: {e}")
+            return None

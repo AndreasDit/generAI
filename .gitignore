@@ -8,7 +8,6 @@ __pycache__/
 # Data
 data/*
 *test*.json
-*test*.py
 
 # C extensions
 *.so
@@ -180,3 +179,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+.DS_Store
+medium_cookies.json
+google_auth.json
+.gitignore
+*.png
+*test*.py

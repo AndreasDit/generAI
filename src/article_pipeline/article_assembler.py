@@ -283,6 +283,8 @@ class ArticleAssembler:
         
         Personalize the headline, for example use How I Did instead if How To. Other examples are The lesson I learned, The mistake I made, Advice you’d give to your past-self, I wish I had known this sooner.
         
+        Add Vulnerability and Authenticity: Share personal anecdotes, challenges, or lessons learned to create a genuine connection with readers. Authenticity resonates more than perfection.
+        
         Format the article with clear section headings and paragraphs.
         Use the content as the primary input to create a cohesive and well-structured article. Use the article idea as context to ensure the article aligns with the original idea.
         Return the article as a markdown file. return ONLY the article content. Do NOT write a json file. Instead write a normal readable article. Use markdown formatting.
